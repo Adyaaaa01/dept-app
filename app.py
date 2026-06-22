@@ -227,7 +227,7 @@ with col2:
     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
     "Одоогийн төлөв": status,
     "Тэмдэглэл": note
-}
+        }
 
 st.session_state.df_court = pd.concat(
     [st.session_state.df_court, pd.DataFrame([new_data])],
