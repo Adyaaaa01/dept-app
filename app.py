@@ -224,7 +224,8 @@ with col2:
                     "Одоогийн төлөв": status,
                     "Тэмдэглэл": note
                 }
-                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                save_data() # ЭНЭ МОРИЙГ НЭМЭХ
                 st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 # Түр зуурын өгөгдөл цэвэрлэх
                 for key in ['temp_name', 'temp_c_date', 'temp_o_date']:
