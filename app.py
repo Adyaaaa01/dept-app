@@ -215,17 +215,23 @@ with col2:
         if submitted:
             if name:
                 new_id = len(st.session_state.df_court) + 1
-                new_data = {
-                    "№": new_id,
-                    "Зээлдэгч": name,
-                    "Хариуцсан ажилтан": officer,
-                    "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
-                    "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
-                    "Одоогийн төлөв": status,
-                    "Тэмдэглэл": note
-                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
-                save_data() # ЭНЭ МОРИЙГ НЭМЭХ
-                st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
+               new_data = {
+    "Зээлдэгч": name,
+    "Шүүх": court_name,
+    "Шийдвэрийн дугаар": decision_no,
+    "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
+    "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
+    "Одоогийн төлөв": status,
+    "Тэмдэглэл": note
+}
+
+st.session_state.df_court = pd.concat(
+    [st.session_state.df_court, pd.DataFrame([new_data])],
+    ignore_index=True
+)
+
+save_data()
+st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 # Түр зуурын өгөгдөл цэвэрлэх
                 for key in ['temp_name', 'temp_c_date', 'temp_o_date']:
                     if key in st.session_state: del st.session_state[key]
