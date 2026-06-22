@@ -223,8 +223,7 @@ with col2:
                     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
                     "Одоогийн төлөв": status,
                     "Тэмдэглэл": note
-                }
-                                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                 save_data() # ЭНЭ МОРИЙГ НЭМЭХ
                 st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 # Түр зуурын өгөгдөл цэвэрлэх
