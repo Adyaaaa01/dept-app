@@ -141,4 +141,5 @@ with col2:
         default_date = st.session_state.get('temp_date', datetime.now())
         date_obj = st.date_input("Захирамж гарсан / Дуусах огноо", value=default_date)
         
-      next_action = st.selectbox("Дараагийн хийх ажил", ["Очиж уулзах", "Утсаар мэдэгдэх", "Шийдвэр хүлээх", "Гүйцэтгэх хуудас бичүүлэх"])
+        next_action = st.selectbox("Дараагийн хийх ажил", ["Очиж уулзах", "Утсаар мэдэгдэх", "Шийдвэр хүлээх", "Гүйцэтгэх хуудас бичүүлэх"])
+        officer = st.text_input("Хариуцсан ажилтан", value="Б.Адъяабазар")
