@@ -215,7 +215,11 @@ with col2:
         if submitted:
             if name:
                 new_id = len(st.session_state.df_court) + 1
-               new_data = {
+               if st.button("Бүртгэх"):
+    if name:
+        new_data = {
+            ...
+        }
     "Зээлдэгч": name,
     "Шүүх": court_name,
     "Шийдвэрийн дугаар": decision_no,
