@@ -41,12 +41,27 @@ STATUS_OPTIONS = [
     "Өр төлбөр дууссан"
 ]
 
-# --- Session State үүсгэх ---
+import os
+# --- Session State үүсгэх болон өгөгдөл хадгалах ---
+DATA_FILE = "court_data.csv"
+
 if 'df_court' not in st.session_state:
-    st.session_state.df_court = pd.DataFrame(columns=[
-        "№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", 
-        "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"
-    ])
+    # Хэрэв өмнө хадгалсан файл байвал түүнийг уншина
+    if os.path.exists(DATA_FILE):
+        st.session_state.df_court = pd.read_csv(DATA_FILE)
+        # Хуучин өгөгдөлд багана дутуу байвал нэмж өгөх
+        if 'Одоогийн төлөв' not in st.session_state.df_court.columns:
+            st.session_state.df_court['Одоогийн төлөв'] = ''
+    else:
+        # Анх удаа ажиллуулж байгаа бол хоосон хүснэгт үүсгэх
+        st.session_state.df_court = pd.DataFrame(columns=[
+            "№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", 
+            "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"
+        ])
+
+# Өгөгдлийг файлд хадгалах функц
+def save_data():
+    st.session_state.df_court.to_csv(DATA_FILE, index=False)
 
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
