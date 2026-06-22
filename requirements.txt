@@ -1,6 +1,7 @@
 streamlit
 pandas
-openai
 openpyxl
 python-docx
 pdfplumber
+google-generativeai
+Pillow
