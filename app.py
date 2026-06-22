@@ -72,20 +72,8 @@ def extract_info_from_file(file_obj, key):
     try:
         genai.configure(api_key=key)
         
-        # Боломжтой моделийг автоматаар сонгох (зураг бол vision, текст бол pro)
-        available_models = [m.name for m in genai.list_models()]
-        
-        # Зураг бол gemini-1.5-pro ашиглана
-        if file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
-            model_name = 'gemini-1.5-pro'
-            if model_name not in available_models and 'models/gemini-1.0-pro-vision' in available_models:
-                model_name = 'gemini-1.0-pro-vision'
-        else:
-            # Текст (Word, PDF) бол gemini-pro ашиглана
-            model_name = 'gemini-pro'
-            if model_name not in available_models and 'models/gemini-1.0-pro' in available_models:
-                model_name = 'gemini-1.0-pro'
-
+        # Таны API-д байгаа хамгийн шилдэг моделийг сонгож ашиглах
+        model_name = 'gemini-flash-latest'
         model = genai.GenerativeModel(model_name)
         
         file_text = ""
@@ -125,15 +113,7 @@ def extract_info_from_file(file_obj, key):
         return data.get("name"), data.get("date")
             
     except Exception as e:
-        # Хэрэв модель олдохгүй бол боломжтой моделийн жагсаалтыг харуулна
-        if "404" in str(e):
-            try:
-                models_list = [m.name for m in genai.list_models()]
-                st.error(f"Модель олдсонгүй. Таны API дээр боломжтой моделиуд: {', '.join(models_list)}")
-            except:
-                st.error("API Key буруу эсвэл холболт хийгдсэнгүй.")
-        else:
-            st.error(f"AI уншихад алдаа гарлаа: {e}")
+        st.error(f"AI уншихад алдаа гарлаа: {e}")
         return None, None
 
 # --- 2. Шинэ хэрэг бүртгэх хэсэг ---
