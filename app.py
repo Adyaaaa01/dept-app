@@ -216,7 +216,7 @@ with col2:
             if name:
                 new_id = len(st.session_state.df_court) + 1
     if st.button("Бүртгэх"):
-    if name:
+    'if' name:
         new_data = {
             ...
         }
