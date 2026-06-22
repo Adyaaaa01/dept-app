@@ -71,7 +71,7 @@ def extract_info_from_file(file_obj, key):
     
     try:
         genai.configure(api_key=key)
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         file_text = ""
         prompt = """Энэхүү баримтаас дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
@@ -143,3 +143,62 @@ with col2:
         
         next_action = st.selectbox("Дараагийн хийх ажил", ["Очиж уулзах", "Утсаар мэдэгдэх", "Шийдвэр хүлээх", "Гүйцэтгэх хуудас бичүүлэх"])
         officer = st.text_input("Хариуцсан ажилтан", value="Б.Адъяабазар")
+        
+        submitted = st.form_submit_button("Бүртгэл хадгалах", use_container_width=True)
+        if submitted:
+            if name:
+                new_id = len(st.session_state.df_court) + 1
+                new_data = {
+                    "№": new_id,
+                    "Хавтас/Зээлдэгч": name,
+                    "Ажиллагааны төрөл": "Шүүхийн нэхэмжлэх",
+                    "Хариуцсан ажилтан": officer,
+                    "Хүлээж авсан огноо": datetime.now().strftime("%Y-%m-%d"),
+                    "Захирамж гарсан огноо": date_obj.strftime("%Y-%m-%d"),
+                    "Төлөв": "Шүүхэд өгсөн",
+                    "Тэмдэглэл": next_action
+                }
+                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
+                if 'temp_name' in st.session_state: del st.session_state['temp_name']
+                if 'temp_date' in st.session_state: del st.session_state['temp_date']
+            else:
+                st.error("Зээлдэгчийн нэр хоосон байна!")
+
+# --- 3. AI Зөвлөх: Хугацаа шалгаж мэдэгдэл өгөх ---
+st.header("🚨 AI Зөвлөх - Хугацааны мэдэгдэл")
+today = datetime.now().date()
+alerts = []
+
+if not st.session_state.df_court.empty:
+    for idx, row in st.session_state.df_court.iterrows():
+        if pd.notna(row["Захирамж гарсан огноо"]):
+            try:
+                exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
+                days_left = (exp_date - today).days
+                
+                if days_left < 0:
+                    alerts.append(f"danger|🚨 <b>{row['Хавтас/Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{-days_left} хоногийн өмнө</b> дууссан! Яаралтай очиж уулзах шаардлагатай.")
+                elif days_left <= 7:
+                    alerts.append(f"warning|⏰ <b>{row['Хавтас/Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
+            except:
+                pass
+
+if alerts:
+    for alert in alerts:
+        css_class, msg = alert.split("|", 1)
+        st.markdown(f'<div class="alert-box {css_class}">{msg}</div>', unsafe_allow_html=True)
+else:
+    st.info("ℹ️ Хугацаа дуусаж байгаа нэхэмжлэл алга байна.")
+
+# --- 4. Бүртгэлийн жагсаалт ---
+st.header("📊 Бүртгэлийн жагсаалт")
+if not st.session_state.df_court.empty:
+    st.data_editor(
+        st.session_state.df_court, 
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic"
+    )
+else:
+    st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
