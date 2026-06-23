@@ -6,6 +6,7 @@ import io
 import os
 import time
 import re
+import base64
 import docx
 import pdfplumber
 import google.generativeai as genai
@@ -13,6 +14,11 @@ from PIL import Image
 
 # --- Хуудасны тохиргоо ---
 st.set_page_config(page_title="Өр нэхэмжлэх удирдлага", layout="wide", page_icon="⚖️")
+
+# Uploads фолдер үүсгэх
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
 
 # --- Орчин үеийн өнгө үзэмж (CSS) ---
 st.markdown("""
@@ -38,6 +44,8 @@ st.markdown("""
     .info-row { font-size: 14px; color: #555; margin-top: 8px; }
     .info-label { font-weight: bold; color: #333; }
     .note-box { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; color: #666; border: 1px solid #e9ecef; }
+    .img-container { margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef; }
+    .img-container img { width: 100%; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -48,7 +56,7 @@ STATUS_OPTIONS = [
     "Шүүхэд өгсөн", 
     "Эвлэрүүлэн зуучлалд өгсөн", 
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
-    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон", # ШИНЭ ТӨЛӨВ
+    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон",
     "Захирамж гарсан", 
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", 
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
@@ -60,7 +68,7 @@ STATUS_COLORS = {
     "Шүүхэд өгсөн": "#1f3a5f",
     "Эвлэрүүлэн зуучлалд өгсөн": "#8e44ad",
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
-    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d", # ШИНЭ ӨНГӨ
+    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d",
     "Захирамж гарсан": "#f39c12",
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400",
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
@@ -70,7 +78,7 @@ STATUS_COLORS = {
 
 DATA_FILE = "court_data.csv"
 API_KEY_FILE = "api_key.txt"
-required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
+required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл", "Файлын нэр"]
 
 if 'df_court' not in st.session_state:
     if os.path.exists(DATA_FILE):
@@ -137,7 +145,6 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- БҮГДИЙГ УСТГАХ ТОVЧ ---
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_container_width=True):
     st.session_state.df_court = pd.DataFrame(columns=required_cols)
@@ -145,15 +152,15 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Ухаалаг Retry системтэй) ---
+# --- AI унших функц ---
 def generate_with_retry(model, prompt_parts, max_retries=4):
     for attempt in range(max_retries):
         try:
             return model.generate_content(prompt_parts, request_options={"timeout": 120})
         except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 60 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
-                time.sleep(60)
+                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 20 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
+                time.sleep(20)
             else:
                 raise e
 
@@ -166,7 +173,6 @@ def extract_info_from_file(file_obj, key):
         model = genai.GenerativeModel('gemini-flash-latest')
         
         file_text = ""
-        # Промптыг маш нарийн болгож, зураг дээрх утга санааг өмнө нь таних шаардсан
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
         1. "doc_type": Баримтын төрөл ("Шүүхийн нэхэмжлэл", "Эвлэрүүлэн зуучлалын өргөдөл", эсвэл "Гүйцэтгэх захирамж").
         2. "name": Өрнийн эзэн буюу ЗЭЭЛДЭГЧИЙН нэр (Овог Нэр). Хариуцагч, төлөөлөгчийн нэрийг бичиж болохгүй!
@@ -181,7 +187,7 @@ def extract_info_from_file(file_obj, key):
         5. "court_date": Шүүхэд өгсөн эсвэл нэхэмжлэх гарсан огноо (YYYY-MM-DD форматад). Өөр огноо бүү бич.
         6. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
         7. "order_date": Захирамж гарсан огноо (YYYY-MM-DD форматад, үгүй бол null).
-        8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич.
+        8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич. ХЭРЭВ ХЭРЭГ ДУУСГАВАР БОЛСОН БОЛ ЯМАР ШАЛТГААНААР ДУУСГАВАР БОЛСНЫГ ЗААВАЛ ЭНД БИЧНЭ ҮҮ.
         Зөвхөн JSON буцаа."""
 
         if file_obj.name.endswith('.docx'):
@@ -194,9 +200,7 @@ def extract_info_from_file(file_obj, key):
             response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
-            # Зургийг бараг 2 дахин томруулж унших нарийвчлалыг нэмэгдүүлэх
-            img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
-            max_size = (2048, 2048)
+            max_size = (1024, 1024)
             img.thumbnail(max_size)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
@@ -302,17 +306,26 @@ with tab2:
                                     current_status = status_hint
 
                                 new_id = len(st.session_state.df_court) + 1
+                                
+                                # Файлыг серверт хадгалах
+                                safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '.', '_')).rstrip()
+                                saved_filename = f"{new_id}_{safe_name}_{file_obj.name}"
+                                file_path = os.path.join(UPLOAD_DIR, saved_filename)
+                                with open(file_path, "wb") as f:
+                                    f.write(file_obj.getbuffer())
+
                                 new_data = {
                                     "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
                                     "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d") if court_date else "",
                                     "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d") if mediation_date else "",
                                     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
-                                    "Одоогийн төлөв": current_status, "Тэмдэглэл": summary if summary else ""
+                                    "Одоогийн төлөв": current_status, "Тэмдэглэл": summary if summary else "",
+                                    "Файлын нэр": saved_filename
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
                                 if i < len(uploaded_files) - 1:
-                                    time.sleep(10)
+                                    time.sleep(5)
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
@@ -336,7 +349,8 @@ with tab2:
                     new_data = {
                         "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
                         "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"), "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d"),
-                        "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "", "Одоогийн төлөв": status, "Тэмдэглэл": note
+                        "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "", "Одоогийн төлөв": status, "Тэмдэглэл": note,
+                        "Файлын нэр": ""
                     }
                     st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                     save_data()
@@ -380,6 +394,19 @@ with tab3:
                 status = row["Одоогийн төлөв"]
                 color = STATUS_COLORS.get(status, "#1f3a5f")
                 
+                # Зураг харуулах эсэхийг шалгах
+                image_html = ""
+                if "Файлын нэр" in row and row["Файлын нэр"]:
+                    file_path = os.path.join(UPLOAD_DIR, row["Файлын нэр"])
+                    if os.path.exists(file_path):
+                        # Зураг бол шууд харуулах, PDF/Word бол файлын нэрийг харуулах
+                        if row["Файлын нэр"].lower().endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
+                            with open(file_path, "rb") as img_file:
+                                img_b64 = base64.b64encode(img_file.read()).decode()
+                            image_html = f'<div class="img-container"><img src="data:image/jpeg;base64,{img_b64}" alt="Баримт"></div>'
+                        else:
+                            image_html = f'<div class="note-box">📎 Файл: {row["Файлын нэр"]}</div>'
+
                 card_html = f"""
                 <div class="client-card" style="border-left-color: {color};">
                     <div class="client-name">{row['Зээлдэгч']} 
@@ -390,6 +417,7 @@ with tab3:
                     <div class="info-row"><span class="info-label">🤝 Эвлэрүүлэнд өгсөн:</span> {row['Эвлэрүүлэнд өгсөн огноо']}</div>
                     <div class="info-row"><span class="info-label">⚖️ Захирамж гарсан:</span> {row['Захирамж гарсан огноо']}</div>
                     {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
+                    {image_html}
                 </div>
                 """
                 with cols[idx % 2]:
