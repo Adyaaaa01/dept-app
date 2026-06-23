@@ -152,15 +152,15 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц ---
+# --- AI унших функц (Ухаалаг Retry системтэй) ---
 def generate_with_retry(model, prompt_parts, max_retries=4):
     for attempt in range(max_retries):
         try:
             return model.generate_content(prompt_parts, request_options={"timeout": 120})
         except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 20 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
-                time.sleep(20)
+                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 1 минут 30 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
+                time.sleep(90) # Хүлээх хугацааг 90 секунд болгож уртасгав
             else:
                 raise e
 
@@ -307,8 +307,7 @@ with tab2:
 
                                 new_id = len(st.session_state.df_court) + 1
                                 
-                                # Файлыг серверт хадгалах
-                                safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '.', '_')).rstrip()
+                                safe_name = "".join(c for c in str(name) if c.isalnum() or c in (' ', '.', '_')).rstrip()
                                 saved_filename = f"{new_id}_{safe_name}_{file_obj.name}"
                                 file_path = os.path.join(UPLOAD_DIR, saved_filename)
                                 with open(file_path, "wb") as f:
@@ -324,8 +323,9 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
+                                # Олон файл оруулах үед хязгаарт хүрэхээс сэргийлж 15 секунд хүлээх
                                 if i < len(uploaded_files) - 1:
-                                    time.sleep(5)
+                                    time.sleep(15)
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
@@ -394,12 +394,10 @@ with tab3:
                 status = row["Одоогийн төлөв"]
                 color = STATUS_COLORS.get(status, "#1f3a5f")
                 
-                # Зураг харуулах эсэхийг шалгах
                 image_html = ""
                 if "Файлын нэр" in row and row["Файлын нэр"]:
                     file_path = os.path.join(UPLOAD_DIR, row["Файлын нэр"])
                     if os.path.exists(file_path):
-                        # Зураг бол шууд харуулах, PDF/Word бол файлын нэрийг харуулах
                         if row["Файлын нэр"].lower().endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
                             with open(file_path, "rb") as img_file:
                                 img_b64 = base64.b64encode(img_file.read()).decode()
