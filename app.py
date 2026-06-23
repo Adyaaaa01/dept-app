@@ -116,33 +116,35 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц ---
+# --- AI унших функц (Нарийвчилсан Промпттай) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
     try:
         client = Groq(api_key=key)
         file_text = ""
         
-        prompt = """Extract the following information from this document and return ONLY in JSON format:
-        1. "type": Document type ("Шүүхийн нэхэмжлэл" or "Эвлэрүүлэн зуучлалын өргөдөл")
-        2. "name": Debtor's or Defendant's full name in Mongolian (Surname Firstname)
-        3. "court_date": Date submitted to court in YYYY-MM-DD format (or null)
-        4. "mediation_date": Date submitted to mediation in YYYY-MM-DD format (or null)
-        5. "order_date": Order issue date in YYYY-MM-DD format (or null)
-        6. "summary": Briefly summarize the main content, claims, and requested amount in 1-3 sentences IN MONGOLIAN.
-        Return ONLY JSON, no markdown."""
+        prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
+        1. "doc_type": Баримтын төрөл ("Шүүхийн нэхэмжлэл", "Эвлэрүүлэн зуучлалын өргөдөл", эсвэл "Гүйцэтгэх захирамж").
+        2. "name": Зээлдэгч буюу хариуцагчийн нэр (Овог Нэр).
+        3. "officer": Баримт бичиг дээр бичигдсэн хариуцсан ажилтан, төлөөлөгч эсвэл хуульчийн нэр. Олдоогүй бол null.
+        4. "status_hint": Баримтын агуулгаас хамаарч өөрийн төлвийг нь сонго. Зөвхөн эдгээрээс нэгийг сонго: ["Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]. Хэрэв илүү тодорхой мэдээлэл байхгүй бол "Шүүхэд өгсөн" гэж тооц.
+        5. "court_date": Шүүхэд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
+        6. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
+        7. "order_date": Захирамж гарсан огноо (YYYY-MM-DD форматад, үгүй бол null).
+        8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич.
+        Зөвхөн JSON буцаа, ямар ч нэмэлт тайлбар бичихгүй."""
 
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": prompt + "\n\nDocument text:\n" + file_text}], response_format={"type": "json_object"})
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": prompt + "\n\nDocument text:\n" + file_text}], response_format={"type": "json_object"})
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
@@ -155,27 +157,38 @@ def extract_info_from_file(file_obj, key):
             img.save(buf, format='JPEG', quality=85)
             img_b64 = base64.b64encode(buf.getvalue()).decode('ascii')
             
+            # Зургийн хувьд хамгийн хүчирхэг модель ашиглаж байна
             completion = client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct", 
-                messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
+                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм. Зургийг маш нарийнаар шинжил."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
             )
             result = completion.choices[0].message.content
             if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
         else:
-            return None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None, None
 
-        # ШИНЭ: Хариугаас зөвхөн JSON-ийг таних (Алдаа өгөхөөс сэргийлэх)
         json_match = re.search(r'\{.*\}', result, re.DOTALL)
         if json_match:
             result = json_match.group(0)
         else:
-            return None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None, None
 
         data = json.loads(result)
-        return data.get("type"), data.get("name"), data.get("court_date"), data.get("mediation_date"), data.get("order_date"), data.get("summary", "")
+        doc_type = data.get("doc_type", "Шүүхийн нэхэмжлэл")
+        name = data.get("name")
+        officer = data.get("officer") if data.get("officer") and data.get("officer") != "null" else "Б.Адъяабазар"
+        status_hint = data.get("status_hint", "Шүүхэд өгсөн")
+        
+        c_date = data.get("court_date")
+        m_date = data.get("mediation_date")
+        o_date = data.get("order_date")
+        summary = data.get("summary", "")
+        
+        return doc_type, name, officer, status_hint, c_date, m_date, o_date, summary
+            
     except Exception as e:
         st.error(f"AI уншихад алдаа гарлаа: {e}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
 tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "👥 Харилцагчид"])
@@ -234,7 +247,7 @@ with tab2:
                     progress_bar = st.progress(0); success_count = 0
                     for i, file_obj in enumerate(uploaded_files):
                         with st.spinner(f"Уншиж байна: {file_obj.name}..."):
-                            doc_type, name, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
+                            doc_type, name, officer, status_hint, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
                             if name:
                                 try: court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date and c_date != "null" else ""
                                 except: court_date = ""
@@ -242,10 +255,16 @@ with tab2:
                                 except: mediation_date = ""
                                 try: order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else ""
                                 except: order_date = ""
-                                current_status = "Эвлэрүүлэн зуучлалд өгсөн" if doc_type == "Эвлэрүүлэн зуучлалын өргөдөл" else "Шүүхэд өгсөн"
+                                
+                                # Төлөв сонголтыг зөв таних
+                                if status_hint not in STATUS_OPTIONS:
+                                    current_status = "Эвлэрүүлэн зуучлалд өгсөн" if "эвлэр" in status_hint.lower() else "Шүүхэд өгсөн"
+                                else:
+                                    current_status = status_hint
+
                                 new_id = len(st.session_state.df_court) + 1
                                 new_data = {
-                                    "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": "Б.Адъяабазар",
+                                    "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
                                     "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d") if court_date else "",
                                     "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d") if mediation_date else "",
                                     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
