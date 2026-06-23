@@ -35,10 +35,6 @@ st.markdown("""
     .metric-num { font-size: 28px; font-weight: 800; color: #1f3a5f; }
     .metric-label { font-size: 13px; color: #666; font-weight: 500; margin-top: 5px; }
     
-    .alert-box { padding: 15px; border-radius: 8px; margin-bottom: 10px; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; }
-    .danger { background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); }
-    .warning { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
-    
     .client-card { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; border-left: 6px solid #1f3a5f; }
     .client-name { font-size: 18px; font-weight: bold; color: #1f3a5f; margin-bottom: 10px; }
     .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; color: white; float: right; }
@@ -192,7 +188,6 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            # Хүлээх хугацааг хязгааргүй болгох (timeout-г устгав)
             response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
@@ -258,26 +253,35 @@ with tab1:
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Өр төлбөр дууссан")}</div><div class="metric-label">Өр дууссан</div></div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.subheader("🚨 AI Зөвлөх - Хугацааны мэдэгдэл")
-    today = datetime.now().date()
-    alerts = []
-    if not df.empty:
-        for idx, row in df.iterrows():
-            if pd.notna(row["Захирамж гарсан огноо"]) and str(row["Захирамж гарсан огноо"]) != "":
-                try:
-                    exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
-                    days_left = (exp_date - today).days
-                    if days_left < 0:
-                        alerts.append(f"danger|🚨 <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{-days_left} хоногийн өмнө</b> дууссан! Яаралтай очиж уулзах шаардлагатай.")
-                    elif days_left <= 7:
-                        alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
-                except: pass
-    if alerts:
-        for alert in alerts:
-            css_class, msg = alert.split("|", 1)
-            st.markdown(f'<div class="alert-box {css_class}">{msg}</div>', unsafe_allow_html=True)
+    
+    # ШИНЭ: Хариуцсан ажилтнаар ангилсан Дашбоард
+    st.subheader("👨‍💼 Хариуцсан ажилтнаар ангилсан бүртгэл")
+    if not df.empty and "Хариуцсан ажилтан" in df.columns and "Одоогийн төлөв" in df.columns:
+        officer_df = df.copy()
+        officer_df["Хариуцсан ажилтан"] = officer_df["Хариуцсан ажилтан"].replace("", "Тодорхой бус").fillna("Тодорхой бус")
+        
+        # Pivot хүснэгт үүсгэх (Ажилтан бүр дээр хэдэн хэрэг байгаа нь төлөвөөрөө ангилагдсан)
+        pivot_df = officer_df.pivot_table(
+            index="Хариуцсан ажилтан", 
+            columns="Одоогийн төлөв", 
+            aggfunc='size', 
+            fill_value=0
+        ).reset_index()
+        
+        # Нийт хэрэгийн тоог бодоод хамгийн баруун талд нь нэмэх
+        pivot_df['Нийт хэрэг'] = pivot_df.drop(columns=['Хариуцсан ажилтан']).sum(axis=1)
+        
+        # Хүснэгтийг харуулах
+        st.dataframe(pivot_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("##### 📊 Хариуцсан ажилтны ажлын ачаалал (График)")
+        # График харуулах (Ажилтан бүрийн нийт хэрэгийн тоо)
+        chart_data = pivot_df.set_index("Хариуцсан ажилтан")["Нийт хэрэг"]
+        if not chart_data.empty:
+            st.bar_chart(chart_data)
     else:
-        st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
+        st.info("ℹ️ Хариуцсан ажилтнаар ангилсан өгөгдөл хоосон байна.")
 
 with tab2:
     col1, col2 = st.columns([1, 2])
