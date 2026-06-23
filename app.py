@@ -350,4 +350,32 @@ with tab3:
             rows_to_delete = edited_df[edited_df["Устгах"] == True]
             if not rows_to_delete.empty:
                 st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
-                if st.button(f"❌ Сонгосон {len(rows_to_delete)} х
+                if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
+                    st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
+                    save_data()
+                    st.rerun()
+            else:
+                st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
+                save_data()
+        else:
+            cols = st.columns(2)
+            for idx, row in st.session_state.df_court.fillna("").iterrows():
+                status = row["Одоогийн төлөв"]
+                color = STATUS_COLORS.get(status, "#1f3a5f")
+                
+                card_html = f"""
+                <div class="client-card" style="border-left-color: {color};">
+                    <div class="client-name">{row['Зээлдэгч']} 
+                        <span class="status-badge" style="background-color: {color};">{status}</span>
+                    </div>
+                    <div class="info-row"><span class="info-label">👤 Хариуцсан:</span> {row['Хариуцсан ажилтан']}</div>
+                    <div class="info-row"><span class="info-label">📅 Шүүхэд өгсөн:</span> {row['Шүүхэд өгсөн огноо']}</div>
+                    <div class="info-row"><span class="info-label">🤝 Эвлэрүүлэнд өгсөн:</span> {row['Эвлэрүүлэнд өгсөн огноо']}</div>
+                    <div class="info-row"><span class="info-label">⚖️ Захирамж гарсан:</span> {row['Захирамж гарсан огноо']}</div>
+                    {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
+                </div>
+                """
+                with cols[idx % 2]:
+                    st.markdown(card_html, unsafe_allow_html=True)
+    else:
+        st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
