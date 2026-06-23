@@ -58,12 +58,14 @@ st.markdown("""
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
 st.markdown("##### Google Gemini AI дэмжлэгтэй веб апп")
 
+# Шинэ төлөв нэмэгдсэн: Шүүхийн шийдвэрийн зардалын гэрээ
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", 
     "Эвлэрүүлэн зуучлалд өгсөн", 
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
     "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон",
     "Захирамж гарсан", 
+    "Шүүхийн шийдвэрийн зардалын гэрээ", # ШИНЭ ТӨЛӨВ
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", 
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", 
@@ -76,6 +78,7 @@ STATUS_COLORS = {
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
     "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d",
     "Захирамж гарсан": "#f39c12",
+    "Шүүхийн шийдвэрийн зардалын гэрээ": "#16a085", # ШИНЭ ӨНГӨ
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400",
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа": "#e74c3c",
@@ -137,9 +140,10 @@ def to_excel(df):
         df_med = df[df["Одоогийн төлөв"].isin(["Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон"])].copy()
         df_med.to_excel(writer, index=False, sheet_name='Эвлэрүүлэн зуучлал')
         dashboard_data = {
-            "Үзүүлэлт": ["Нийт хэрэг", "Шүүхэд өгсөн", "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэлд явж байгаа", "Өр дууссан", "Эвлэрүүлэнд өгсөн", "Эвлэрүүлэх захирамж дагуу төлж байгаа", "Дуусгавар болсон"],
+            "Үзүүлэлт": ["Нийт хэрэг", "Шүүхэд өгсөн", "Захирамж гарсан", "Шүүхийн шийдвэрийн зардалын гэрээ", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэлд явж байгаа", "Өр дууссан", "Эвлэрүүлэнд өгсөн", "Эвлэрүүлэх захирамж дагуу төлж байгаа", "Дуусгавар болсон"],
             "Тоо": [
                 len(df), len(df[df["Одоогийн төлөв"] == "Шүүхэд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Захирамж гарсан"]),
+                len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэрийн зардалын гэрээ"]),
                 len(df[df["Одоогийн төлөв"] == "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]), len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа"]),
                 len(df[df["Одоогийн төлөв"] == "Өр төлбөр дууссан"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"]),
                 len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон"])
@@ -158,7 +162,7 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Хязгааргүй хүлээлттэй) ---
+# --- AI унших функц (Нарийвчилсан промпттай) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
@@ -173,11 +177,13 @@ def extract_info_from_file(file_obj, key):
         2. "name": Өрнийн эзэн буюу ЗЭЭЛДЭГЧИЙН нэр (Овог Нэр). Хариуцагч, төлөөлөгчийн нэрийг бичиж болохгүй!
         3. "officer": Баримт бичиг дээр "Итгэмжлэгдсэн төлөөлөгч", "Хуульч", "Гүйцэтгэлийн ажилтан" гэх зэргээр бичигдсэн хүний нэр. Хэрэв олдоогүй бол "null" гэж бич.
         4. "status_hint": ЗУРАГ ДЭЭРХ АГУУЛГААР ЭНЭ ХЭРГИЙН ОДООГИЙН ТӨЛӨВ ЮУ БАЙГААГ НАРИЙН ШИНЖИЛЖ ТОГТОО. Зөвхөн эдгээрээс аль нэгийг сонго: 
-        - "Шүүхэд өгсөн" (Хэрэв зураг дээр шүүхэд өгсөн тухай, эсвэл шүүхийн нэхэмжлэл гарсан тухай бичигдсэн бол)
-        - "Эвлэрүүлэн зуучлалд өгсөн" (Хэрэв эвлэрүүлэн зуучлалд өгсөн бол)
-        - "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон" (Хэрэв эвлэрүүлэх гэсэн ч ирээгүй, гэрээ байгуулаагүй дуусгавар болсон бол)
-        - "Захирамж гарсан" (Хэрэв захирамж гарсан бол)
-        - "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн" (Хэрэв "гүйцэтгэх хуудас олгож өгнө үү", "гүйцэтгэх захирамж гаргаж" гэх мэт үг байвал)
+        - "Шүүхэд өгсөн" (Шинээр нэхэмжлэл гарсан үе шат)
+        - "Эвлэрүүлэн зуучлалд өгсөн" (Эвлэрүүлэн зуучлалд өгсөн бол)
+        - "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон" (Эвлэрүүлэх гэсэн ч ирээгүй, гэрээ байгуулаагүй дуусгавар болсон бол)
+        - "Захирамж гарсан" (Шүүхийн шийдвэр, захирамж гарсан бол)
+        - "Шүүхийн шийдвэрийн зардалын гэрээ" (Хэрэв "шийдвэрийн зардалын тухай гэрээ", "зардалын гэрээг шүүхэд шилжүүлэв" гэх мэт үг байвал заавал үүнийг сонго)
+        - "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн" ("гүйцэтгэх хуудас олгож өгнө үү", "гүйцэтгэх захирамж гаргаж" гэх мэт)
+        - "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа" (Шүүхийн шийдвэр гарсны дараа гүйцэтгэлийн ажиллагаанд шилжсэн бол)
         Анхаар: Зөвхөн нэг үг байна гээд төлвийг нь буруу тогтоохгүй байх. Зургийн бүхэл бүтэн агуулгыг уншиж тогтоо.
         5. "court_date": Шүүхэд өгсөн эсвэл нэхэмжлэх гарсан огноо (YYYY-MM-DD форматад). Өөр огноо бүү бич.
         6. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
@@ -246,15 +252,14 @@ with tab1:
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Захирамж гарсан")}</div><div class="metric-label">Захирамж гарсан</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Эвлэрүүлэн зуучлалд өгсөн")}</div><div class="metric-label">Эвлэрүүлэнд өгсөн</div></div>', unsafe_allow_html=True)
     with cols[2]:
+        st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Шүүхийн шийдвэрийн зардалын гэрээ")}</div><div class="metric-label">Зардалын гэрээ</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Гүйцэтгэх хуудас бичүүлэх гэж өгсөн")}</div><div class="metric-label">Гүйцэтгэх хуудас бичүүлэх</div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа")}</div><div class="metric-label">Гүйцэтгэлд явж байгаа</div></div>', unsafe_allow_html=True)
     with cols[3]:
-        st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон")}</div><div class="metric-label">Дуусгавар болсон</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа")}</div><div class="metric-label">Гүйцэтгэлд явж байгаа</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Өр төлбөр дууссан")}</div><div class="metric-label">Өр дууссан</div></div>', unsafe_allow_html=True)
 
     st.markdown("---")
     
-    # Хариуцсан ажилтнаар ангилсан Дашбоард
     st.subheader("👨‍💼 Хариуцсан ажилтнаар ангилсан бүртгэл")
     if not df.empty and "Хариуцсан ажилтан" in df.columns and "Одоогийн төлөв" in df.columns:
         officer_df = df.copy()
@@ -272,7 +277,6 @@ with tab1:
         
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("##### 📊 Хариуцсан ажилтны хэрэгүүдийн төлөв (Ямар ямар хэрэгтэй вэ?)")
-        # Статус бүрийн өнгөөр ялгасан давхар баганан график (Stacked bar chart)
         chart_data = pivot_df.set_index("Хариуцсан ажилтан").drop(columns=['Нийт хэрэг'])
         if not chart_data.empty:
             st.bar_chart(chart_data)
@@ -307,6 +311,10 @@ with tab2:
 
                                 new_id = len(st.session_state.df_court) + 1
                                 
+                                existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
+                                count = sum(1 for n in existing_names if n.startswith(name))
+                                display_name = f"{name} ({count + 1})" if count > 0 else name
+                                
                                 safe_name = "".join(c for c in str(name) if c.isalnum() or c in (' ', '.', '_')).rstrip()
                                 saved_filename = f"{new_id}_{safe_name}_{file_obj.name}"
                                 file_path = os.path.join(UPLOAD_DIR, saved_filename)
@@ -314,7 +322,7 @@ with tab2:
                                     f.write(file_obj.getbuffer())
 
                                 new_data = {
-                                    "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
+                                    "№": new_id, "Зээлдэгч": display_name, "Хариуцсан ажилтан": officer,
                                     "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d") if court_date else "",
                                     "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d") if mediation_date else "",
                                     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
@@ -345,15 +353,20 @@ with tab2:
             if submitted:
                 if name:
                     new_id = len(st.session_state.df_court) + 1
+                    
+                    existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
+                    count = sum(1 for n in existing_names if n.startswith(name))
+                    display_name = f"{name} ({count + 1})" if count > 0 else name
+                    
                     new_data = {
-                        "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
+                        "№": new_id, "Зээлдэгч": display_name, "Хариуцсан ажилтан": officer,
                         "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"), "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d"),
                         "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "", "Одоогийн төлөв": status, "Тэмдэглэл": note,
                         "Файлын нэр": ""
                     }
                     st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                     save_data()
-                    st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
+                    st.success(f"✅ {display_name} амжилттай бүртгэгдлээ!")
                 else: st.error("Зээлдэгчийн нэр хоосон байна!")
 
 with tab3:
@@ -388,7 +401,6 @@ with tab3:
                 st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
                 save_data()
         else:
-            # Карт хэлбэрээр хурдан гаргах (Хуудаслалт - Pagination)
             PAGE_SIZE = 8
             total_items = len(st.session_state.df_court)
             total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
@@ -440,7 +452,6 @@ with tab3:
                     st.markdown(card_html, unsafe_allow_html=True)
                 display_idx += 1
                 
-            # Хуудас солих товчнууд
             st.markdown("---")
             col1, col2, col3 = st.columns([1, 2, 1])
             with col1:
