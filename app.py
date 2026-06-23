@@ -130,14 +130,26 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц ---
+# --- AI унших функц (Smart Retry системтэй) ---
+def generate_with_retry(model, prompt_parts, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return model.generate_content(prompt_parts, request_options={"timeout": 90})
+        except Exception as e:
+            # Хэрэв 429 (Quota) алдаа гарвал 20 секунд хүлээж дахин оролдоно
+            if "429" in str(e) and attempt < max_retries - 1:
+                st.warning(f"AI-н хязгаар хэтэрсэн тул 20 секунд хүлээж байна... ({attempt+1}/3)")
+                time.sleep(20)
+            else:
+                raise e
+
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
         return None, None, None, None, None, None, None, None
     try:
         genai.configure(api_key=key)
-        # Хязгаар өндөр (1500/өдөр) модель ашиглах
+        # Хамгийн хүчирхэг бөгөөд хязгаар өндөр модель
         model = genai.GenerativeModel('gemini-2.0-flash')
         
         file_text = ""
@@ -155,11 +167,11 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
+            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
+            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
             max_size = (1024, 1024)
@@ -167,7 +179,7 @@ def extract_info_from_file(file_obj, key):
             if img.mode != 'RGB':
                 img = img.convert('RGB')
                 
-            response = model.generate_content([prompt, img], request_options={"timeout": 60})
+            response = generate_with_retry(model, [prompt, img])
         else:
             return None, None, None, None, None, None, None, None
 
@@ -278,6 +290,9 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
+                                # Файл хооронд 5 секунд хүлээж хязгаар дуусахаас сэргийлэх
+                                if i < len(uploaded_files) - 1:
+                                    time.sleep(5)
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
