@@ -75,7 +75,8 @@ st.sidebar.header("📁 Файл оруулах/Татах")
 up_excel = st.sidebar.file_uploader("Excel файлаас өгөгдөл татах", type=['xlsx'])
 if up_excel:
     try:
-        df_import = pd.read_excel(up_excel)
+        # Excel-ийн 'Шүүх нэхэмжлэл' sheet-ийг уншина
+        df_import = pd.read_excel(up_excel, sheet_name="Шүүх нэхэмжлэл")
         st.session_state.df_court = df_import
         save_data()
         st.sidebar.success("Excel амжилттай уншигдлаа!")
@@ -85,7 +86,29 @@ if up_excel:
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Бүртгэл')
+        # 1. Үндсэн бүртгэлийн sheet
+        df.to_excel(writer, index=False, sheet_name='Шүүх нэхэмжлэл')
+        
+        # 2. Эвлэрүүлэн зуучлалын sheet (Төлөв нь эвлэрүүлэлттэй холбоотойг нь салгаж бичнэ)
+        df_med = df[df["Одоогийн төлөв"].isin(["Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"])].copy()
+        df_med.to_excel(writer, index=False, sheet_name='Эвлэрүүлэн зуучлал')
+        
+        # 3. Dashboard sheet (Тоо толгойг бодож бичнэ)
+        dashboard_data = {
+            "ШҮҮХ НЭХЭМЖЛЭЛ DASHBOARD": [""],
+            "Нийт хэрэг": [len(df)],
+            "Шүүхэд өгсөн": [len(df[df["Одоогийн төлөв"] == "Шүүхэд өгсөн"])],
+            "Захирамж гарсан": [len(df[df["Одоогийн төлөв"] == "Захирамж гарсан"])],
+            "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": [len(df[df["Одоогийн төлөв"] == "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"])],
+            "Гүйцэтгэлд явж байгаа": [len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа"])],
+            "Өр дууссан": [len(df[df["Одоогийн төлөв"] == "Өр төлбөр дууссан"])],
+            "ЭВЛЭРҮҮЛЭН ЗУУЧЛАЛ DASHBOARD": [""],
+            "Эвлэрүүлэнд өгсөн": [len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалд өгсөн"])],
+            "Эвлэрүүлэх захирамж дагуу төлж байгаа": [len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"])]
+        }
+        df_dash = pd.DataFrame(dashboard_data)
+        df_dash.to_excel(writer, index=False, sheet_name='Dashboard')
+        
     return output.getvalue()
 
 if not st.session_state.df_court.empty:
@@ -124,13 +147,12 @@ st.markdown("---")
 # --- 1. AI ашиглан Олон файл уншуулах (Groq - Llama) ---
 def extract_info_from_file(file_obj, key):
     if not key:
-        return None, None, None, None, None
+        return None, None, None, None, None, None
     
     try:
         client = Groq(api_key=key)
         
         file_text = ""
-        # Промптод төрлийг ялгаж огноог тус тусд нь танихыг заасан
         prompt = """Энэхүү баримтаас дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
         1. "type": Баримтын төрөл ("Шүүхийн нэхэмжлэл" эсвэл "Эвлэрүүлэн зуучлалын өргөдөл")
         2. "name": Зээлдэгчийн буюу хариуцагчийн нэр (Овог нэр)
@@ -190,7 +212,7 @@ def extract_info_from_file(file_obj, key):
                 result = result.replace("```json", "").replace("```", "").strip()
             
         else:
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
         data = json.loads(result)
         return data.get("type"), data.get("name"), data.get("court_date"), data.get("mediation_date"), data.get("order_date"), data.get("summary", "")
@@ -218,7 +240,6 @@ with col1:
                         doc_type, name, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
                         
                         if name:
-                            # Огноонуудыг форматлах
                             try:
                                 court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date and c_date != "null" else ""
                             except:
@@ -234,7 +255,6 @@ with col1:
                             except:
                                 order_date = ""
                             
-                            # Баримтын төрөлд тааруулж төлөв сонгох
                             if doc_type == "Эвлэрүүлэн зуучлалын өргөдөл":
                                 current_status = "Эвлэрүүлэн зуучлалд өгсөн"
                             else:
