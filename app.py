@@ -295,4 +295,4 @@ if not st.session_state.df_court.empty:
         if pd.notna(row["Захирамж гарсан огноо"]) and str(row["Захирамж гарсан огноо"]) != "":
             try:
                 exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
-              days_left = (exp_date - today).days
+                days_left = (exp_date - today).days
