@@ -303,3 +303,27 @@ if not st.session_state.df_court.empty:
                     alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
             except:
                 pass
+# --- 4. Бүртгэлийн жагсаалт (Шууд засварлах боломжтой) ---
+st.header("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
+if not st.session_state.df_court.empty:
+    # Хоосон утгуудыг цэвэрлэх (Алдаа гарахаас сэргийлэх)
+    display_df = st.session_state.df_court.fillna("")
+    
+    edited_df = st.data_editor(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        column_config={
+            "Одоогийн төлөв": st.column_config.SelectboxColumn(
+                "Одоогийн төлөв",
+                help="Харилцагчийн үе шатыг сонгоно уу",
+                options=STATUS_OPTIONS,
+                required=True
+            )
+        }
+    )
+    st.session_state.df_court = edited_df
+    save_data()
+else:
+    st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
