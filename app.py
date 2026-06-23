@@ -122,7 +122,7 @@ def extract_info_from_file(file_obj, key):
     try:
         genai.configure(api_key=key)
         # Хамгийн хүчирхэг загвар
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        model = genai.GenerativeModel('gemini-flash-latest')
         
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
