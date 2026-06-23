@@ -46,11 +46,9 @@ STATUS_OPTIONS = [
 DATA_FILE = "court_data.csv"
 
 if 'df_court' not in st.session_state:
-    # Хэрэв өмнө хадгалсан файл байвал түүнийг уншина
     if os.path.exists(DATA_FILE):
         try:
             st.session_state.df_court = pd.read_csv(DATA_FILE)
-            # Хуучин өгөгдөлд багана дутуу байвал нэмж өгөх
             required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
             for col in required_cols:
                 if col not in st.session_state.df_court.columns:
@@ -58,13 +56,11 @@ if 'df_court' not in st.session_state:
         except Exception:
             st.session_state.df_court = pd.DataFrame(columns=required_cols)
     else:
-        # Анх удаа ажиллуулж байгаа бол хоосон хүснэгт үүсгэх
         st.session_state.df_court = pd.DataFrame(columns=[
             "№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", 
             "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"
         ])
 
-# Өгөгдлийг файлд хадгалах функц
 def save_data():
     st.session_state.df_court.to_csv(DATA_FILE, index=False)
 
@@ -127,7 +123,7 @@ st.markdown("---")
 def extract_info_from_file(file_obj, key):
     if not key:
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
-        return None, None, None
+        return None, None, None, None
     
     try:
         genai.configure(api_key=key)
@@ -138,6 +134,7 @@ def extract_info_from_file(file_obj, key):
         1. "name": Зээлдэгчийн буюу хариуцагчийн нэр (Овог нэр)
         2. "court_date": Шүүхэд шилжүүлсэн эсвэл өгсөн огноо (YYYY-MM-DD форматад)
         3. "order_date": Захирамж гарсан огноо (Олдоогүй бол null гэж бичнэ үү) (YYYY-MM-DD форматад)
+        4. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр бич.
         Бусад тайлбаргүй зөвхөн JSON буцаа."""
 
         # Word файл унших
@@ -160,7 +157,7 @@ def extract_info_from_file(file_obj, key):
             
         else:
             st.error("Дэмжигдээгүй файлын төрөл байна.")
-            return None, None, None
+            return None, None, None, None
 
         # Gemini-н хариуг цэвэрлэх
         result = response.text.strip()
@@ -168,11 +165,11 @@ def extract_info_from_file(file_obj, key):
             result = result.replace("```json", "").replace("```", "").strip()
             
         data = json.loads(result)
-        return data.get("name"), data.get("court_date"), data.get("order_date")
+        return data.get("name"), data.get("court_date"), data.get("order_date"), data.get("summary", "")
             
     except Exception as e:
         st.error(f"AI уншихад алдаа гарлаа: {e}")
-        return None, None, None
+        return None, None, None, None
 
 # --- 2. Шинэ хэрэг бүртгэх хэсэг ---
 st.header("📄 Шинэ нэхэмжлэл / Захирамж бүртгэх")
@@ -183,7 +180,7 @@ with col1:
     if st.button("🤖 AI-аар файл уншуулах", use_container_width=True):
         if uploaded_file:
             with st.spinner("Gemini AI файл уншиж байна. Түр хүлээнэ үү..."):
-                name, c_date, o_date = extract_info_from_file(uploaded_file, api_key)
+                name, c_date, o_date, summary = extract_info_from_file(uploaded_file, api_key)
                 if name:
                     st.session_state['temp_name'] = name
                     try:
@@ -195,6 +192,9 @@ with col1:
                         if o_date and o_date != "null": st.session_state['temp_o_date'] = datetime.strptime(o_date, "%Y-%m-%d").date()
                         else: st.session_state['temp_o_date'] = None
                     except: st.session_state['temp_o_date'] = None
+                    
+                    if summary:
+                        st.session_state['temp_note'] = summary
                     
                     st.success("✅ Амжилттай уншилаа! Баруун талд шалгаад баталгаажуулна уу.")
         else:
@@ -213,7 +213,9 @@ with col2:
         
         status = st.selectbox("Одоогийн төлөв / Дараагийн хийх ажил", STATUS_OPTIONS, index=0)
         officer = st.text_input("Хариуцсан ажилтан", value="Б.Адъяабазар")
-        note = st.text_input("Тэмдэглэл")
+        
+        # text_area ашиглан олон мөр бичих боломжтой болгож, AI-н танисан агуулгыг автоматаар оруулах
+        note = st.text_area("Тэмдэглэл (Өргөдлийн агуулга)", value=st.session_state.get('temp_note', ''))
         
         submitted = st.form_submit_button("Бүртгэл хадгалах", use_container_width=True)
         if submitted:
@@ -229,10 +231,9 @@ with col2:
                     "Тэмдэглэл": note
                 }
                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
-                save_data() # Өгөгдлийг файлд хадгалах
+                save_data()
                 st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
-                # Түр зуурын өгөгдөл цэвэрлэх
-                for key in ['temp_name', 'temp_c_date', 'temp_o_date']:
+                for key in ['temp_name', 'temp_c_date', 'temp_o_date', 'temp_note']:
                     if key in st.session_state: del st.session_state[key]
             else:
                 st.error("Зээлдэгчийн нэр хоосон байна!")
@@ -266,7 +267,6 @@ else:
 # --- 4. Бүртгэлийн жагсаалт (Шууд засварлах боломжтой) ---
 st.header("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
 if not st.session_state.df_court.empty:
-    # Data editor ашиглан хүснэгтийг засварлах боломжтой болгоно
     edited_df = st.data_editor(
         st.session_state.df_court,
         use_container_width=True,
@@ -281,8 +281,7 @@ if not st.session_state.df_court.empty:
             )
         }
     )
-    # Хэрвээ хэрэглэгч засварласан бол session-д хадгалах
     st.session_state.df_court = edited_df
-    save_data() # Засварласан өгөгдлийг файлд хадгалах
+    save_data()
 else:
     st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
