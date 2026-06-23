@@ -4,9 +4,11 @@ from datetime import datetime
 import json
 import io
 import os
+import time
 import docx
 import pdfplumber
-import google.generativeai as genai
+from groq import Groq
+import base64
 from PIL import Image
 
 # --- Хуудасны тохиргоо ---
@@ -28,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Google Gemini AI дэмжлэгтэй хөнгөн бөгөөд хэрэглэхэд хялбар веб апп")
+st.markdown("##### Groq AI (Llama) дэмжлэгтэй хөнгөн бөгөөд хэрэглэхэд хялбар веб апп")
 
 # --- Үе шатын төлөвүүд ---
 STATUS_OPTIONS = [
@@ -66,7 +68,7 @@ def save_data():
 
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
-api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу.")
+api_key = st.sidebar.text_input("Groq API Key оруулна уу", type="password", help="console.groq.com сайтад бүртгүүлж үнэгүй key авна уу.")
 
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Файл оруулах/Татах")
@@ -119,15 +121,13 @@ with cols[3]:
 
 st.markdown("---")
 
-# --- 1. AI ашиглан Зураг/Word/PDF уншуулах (Gemini) ---
+# --- 1. AI ашиглан Олон файл уншуулах (Groq - Llama) ---
 def extract_info_from_file(file_obj, key):
     if not key:
-        st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
         return None, None, None, None
     
     try:
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel('gemini-flash-latest')
+        client = Groq(api_key=key)
         
         file_text = ""
         prompt = """Энэхүү баримтаас дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
@@ -137,72 +137,121 @@ def extract_info_from_file(file_obj, key):
         4. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр бич.
         Бусад тайлбаргүй зөвхөн JSON буцаа."""
 
-        # Word файл унших
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
             
-        # PDF файл унших
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."},
+                    {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}
+                ],
+                response_format={"type": "json_object"}
+            )
+            result = completion.choices[0].message.content
+            
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages:
                     file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
+                    
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."},
+                    {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}
+                ],
+                response_format={"type": "json_object"}
+            )
+            result = completion.choices[0].message.content
             
-        # Зураг унших
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
             img = Image.open(file_obj)
-            response = model.generate_content([prompt, img])
+            # Зургийг base64 болгох
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG')
+            img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            
+            completion = client.chat.completions.create(
+                model="llama-3.2-90b-vision-preview",
+                messages=[
+                    {"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                    ]}
+                ]
+            )
+            result = completion.choices[0].message.content
+            # JSON-ыг цэвэрлэх
+            if result.startswith("```json"):
+                result = result.replace("```json", "").replace("```", "").strip()
             
         else:
-            st.error("Дэмжигдээгүй файлын төрөл байна.")
             return None, None, None, None
 
-        # Gemini-н хариуг цэвэрлэх
-        result = response.text.strip()
-        if result.startswith("```json"):
-            result = result.replace("```json", "").replace("```", "").strip()
-            
         data = json.loads(result)
         return data.get("name"), data.get("court_date"), data.get("order_date"), data.get("summary", "")
             
     except Exception as e:
-        st.error(f"AI уншихад алдаа гарлаа: {e}")
         return None, None, None, None
 
-# --- 2. Шинэ хэрэг бүртгэх хэсэг ---
-st.header("📄 Шинэ нэхэмжлэл / Захирамж бүртгэх")
+# --- 2. Олон файл зэрэг бүртгэх хэсэг ---
+st.header("📄 Шинэ нэхэмжлэл / Захирамж бүртгэх (Олон файл зэрэг оруулах)")
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    uploaded_file = st.file_uploader("Захирамж / Нэхэмжлэл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'])
-    if st.button("🤖 AI-аар файл уншуулах", use_container_width=True):
-        if uploaded_file:
-            with st.spinner("Gemini AI файл уншиж байна. Түр хүлээнэ үү..."):
-                name, c_date, o_date, summary = extract_info_from_file(uploaded_file, api_key)
-                if name:
-                    st.session_state['temp_name'] = name
-                    try:
-                        if c_date: st.session_state['temp_c_date'] = datetime.strptime(c_date, "%Y-%m-%d").date()
-                        else: st.session_state['temp_c_date'] = datetime.now().date()
-                    except: st.session_state['temp_c_date'] = datetime.now().date()
+    uploaded_files = st.file_uploader("Олон файл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
+    
+    if st.button("🤖 Бүх файлыг AI-аар уншуулах", use_container_width=True):
+        if uploaded_files:
+            if not api_key:
+                st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
+            else:
+                progress_bar = st.progress(0)
+                success_count = 0
+                
+                for i, file_obj in enumerate(uploaded_files):
+                    with st.spinner(f"Уншиж байна: {file_obj.name}..."):
+                        name, c_date, o_date, summary = extract_info_from_file(file_obj, api_key)
+                        
+                        if name:
+                            try:
+                                court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date else datetime.now().date()
+                            except:
+                                court_date = datetime.now().date()
+                                
+                            try:
+                                order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else None
+                            except:
+                                order_date = None
+                            
+                            new_id = len(st.session_state.df_court) + 1
+                            new_data = {
+                                "№": new_id,
+                                "Зээлдэгч": name,
+                                "Хариуцсан ажилтан": "Б.Адъяабазар",
+                                "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
+                                "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
+                                "Одоогийн төлөв": "Шүүхэд өгсөн",
+                                "Тэмдэглэл": summary if summary else ""
+                            }
+                            st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                            save_data()
+                            success_count += 1
+                        else:
+                            st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                     
-                    try:
-                        if o_date and o_date != "null": st.session_state['temp_o_date'] = datetime.strptime(o_date, "%Y-%m-%d").date()
-                        else: st.session_state['temp_o_date'] = None
-                    except: st.session_state['temp_o_date'] = None
-                    
-                    if summary:
-                        st.session_state['temp_note'] = summary
-                    
-                    st.success("✅ Амжилттай уншилаа! Баруун талд шалгаад баталгаажуулна уу.")
+                    progress_bar.progress((i + 1) / len(uploaded_files))
+                
+                st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
         else:
-            st.warning("Эхлээд файл оруулна уу.")
+            st.warning("Эхлээд файлуудаа оруулна уу.")
 
 with col2:
+    st.subheader("Гар аргаар нэг бүрчлэн бүртгэх (Хэрэв AI алдаа өгвөл)")
     with st.form("burtgeh_form"):
-        st.subheader("Бүртгэлийн мэдээлэл баталгаажуулах")
         name = st.text_input("Зээлдэгчийн нэр", value=st.session_state.get('temp_name', ''))
         
         c_col, o_col = st.columns(2)
@@ -213,8 +262,6 @@ with col2:
         
         status = st.selectbox("Одоогийн төлөв / Дараагийн хийх ажил", STATUS_OPTIONS, index=0)
         officer = st.text_input("Хариуцсан ажилтан", value="Б.Адъяабазар")
-        
-        # text_area ашиглан олон мөр бичих боломжтой болгож, AI-н танисан агуулгыг автоматаар оруулах
         note = st.text_area("Тэмдэглэл (Өргөдлийн агуулга)", value=st.session_state.get('temp_note', ''))
         
         submitted = st.form_submit_button("Бүртгэл хадгалах", use_container_width=True)
@@ -248,40 +295,4 @@ if not st.session_state.df_court.empty:
         if pd.notna(row["Захирамж гарсан огноо"]) and str(row["Захирамж гарсан огноо"]) != "":
             try:
                 exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
-                days_left = (exp_date - today).days
-                
-                if days_left < 0:
-                    alerts.append(f"danger|🚨 <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{-days_left} хоногийн өмнө</b> дууссан! Яаралтай очиж уулзах шаардлагатай.")
-                elif days_left <= 7:
-                    alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
-            except:
-                pass
-
-if alerts:
-    for alert in alerts:
-        css_class, msg = alert.split("|", 1)
-        st.markdown(f'<div class="alert-box {css_class}">{msg}</div>', unsafe_allow_html=True)
-else:
-    st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
-
-# --- 4. Бүртгэлийн жагсаалт (Шууд засварлах боломжтой) ---
-st.header("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
-if not st.session_state.df_court.empty:
-    edited_df = st.data_editor(
-        st.session_state.df_court,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="dynamic",
-        column_config={
-            "Одоогийн төлөв": st.column_config.SelectboxColumn(
-                "Одоогийн төлөв",
-                help="Харилцагчийн үе шатыг сонгоно уу",
-                options=STATUS_OPTIONS,
-                required=True
-            )
-        }
-    )
-    st.session_state.df_court = edited_df
-    save_data()
-else:
-    st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
+                days_left = (exp_date - today
