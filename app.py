@@ -5,6 +5,7 @@ import json
 import io
 import os
 import time
+import re
 import docx
 import pdfplumber
 from groq import Groq
@@ -124,7 +125,6 @@ def extract_info_from_file(file_obj, key):
         client = Groq(api_key=key)
         file_text = ""
         
-        # Алдаагаас сэргийлж промптыг англиар бичив. Хариуг монголоор өгнө.
         prompt = """Extract the following information from this document and return ONLY in JSON format:
         1. "type": Document type ("Шүүхийн нэхэмжлэл" or "Эвлэрүүлэн зуучлалын өргөдөл")
         2. "name": Debtor's or Defendant's full name in Mongolian (Surname Firstname)
@@ -161,6 +161,13 @@ def extract_info_from_file(file_obj, key):
             )
             result = completion.choices[0].message.content
             if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
+        else:
+            return None, None, None, None, None, None
+
+        # ШИНЭ: Хариугаас зөвхөн JSON-ийг таних (Алдаа өгөхөөс сэргийлэх)
+        json_match = re.search(r'\{.*\}', result, re.DOTALL)
+        if json_match:
+            result = json_match.group(0)
         else:
             return None, None, None, None, None, None
 
