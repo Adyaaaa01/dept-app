@@ -162,7 +162,7 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Хүлээлтгүй шууд ажилладаг) ---
+# --- AI унших функц (Хязгааргүй хүлээлттэй) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
@@ -192,18 +192,19 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
+            # Хүлээх хугацааг хязгааргүй болгох (timeout-г устгав)
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
             max_size = (1024, 1024)
             img.thumbnail(max_size)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            response = model.generate_content([prompt, img], request_options={"timeout": 60})
+            response = model.generate_content([prompt, img])
         else:
             return None, None, None, None, None, None, None, None
 
@@ -230,7 +231,6 @@ def extract_info_from_file(file_obj, key):
         return doc_type, name, officer, status_hint, c_date, m_date, o_date, summary
             
     except Exception as e:
-        # Хязгаар дууссан бол түр хүлээх биш, шууд алдааг харуулж дараагийн файл руу ордог болгов
         st.error(f"Алдаа ({file_obj.name}): {e}")
         return None, None, None, None, None, None, None, None
 
@@ -290,7 +290,7 @@ with tab2:
                 else:
                     progress_bar = st.progress(0); success_count = 0
                     for i, file_obj in enumerate(uploaded_files):
-                        with st.spinner(f"Уншиж байна: {file_obj.name}..."):
+                        with st.spinner(f"Уншиж байна: {file_obj.name} (Хүлээж байна...)"):
                             doc_type, name, officer, status_hint, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
                             if name:
                                 try: court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date and c_date != "null" else ""
@@ -323,9 +323,6 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
-                                # Хязгаар дуусахаас сэргийлж файл хооронд 5 секунд хүлээх (гэхдээ гацахгүй)
-                                if i < len(uploaded_files) - 1:
-                                    time.sleep(5)
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     if success_count > 0:
                         st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
