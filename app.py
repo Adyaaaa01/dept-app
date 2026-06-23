@@ -63,12 +63,12 @@ STATUS_COLORS = {
 
 DATA_FILE = "court_data.csv"
 API_KEY_FILE = "api_key.txt"
+required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
 
 if 'df_court' not in st.session_state:
     if os.path.exists(DATA_FILE):
         try:
             st.session_state.df_court = pd.read_csv(DATA_FILE)
-            required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
             for col in required_cols:
                 if col not in st.session_state.df_court.columns:
                     st.session_state.df_court[col] = ""
