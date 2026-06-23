@@ -31,6 +31,17 @@ st.markdown("""
     .danger { background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); }
     .warning { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
     .stDataFrame { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    
+    /* Харилцагчийн Карт үзэмж */
+    .client-card {
+        background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
+        margin-bottom: 20px; border-left: 6px solid #1f3a5f; transition: transform 0.2s;
+    }
+    .client-name { font-size: 20px; font-weight: bold; color: #1f3a5f; margin-bottom: 10px; }
+    .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; float: right; }
+    .info-row { font-size: 14px; color: #555; margin-top: 8px; }
+    .info-label { font-weight: bold; color: #333; }
+    .note-box { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; color: #666; border: 1px solid #e9ecef; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -42,6 +53,18 @@ STATUS_OPTIONS = [
     "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", "Өр төлбөр дууссан"
 ]
+
+# Төлөв бүрийн өнгө
+STATUS_COLORS = {
+    "Шүүхэд өгсөн": "#1f3a5f",
+    "Эвлэрүүлэн зуучлалд өгсөн": "#8e44ad",
+    "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
+    "Захирамж гарсан": "#f39c12",
+    "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400",
+    "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
+    "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа": "#e74c3c",
+    "Өр төлбөр дууссан": "#27ae60"
+}
 
 DATA_FILE = "court_data.csv"
 
@@ -97,7 +120,7 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц ---
+# --- AI унших функц (Шинэ модель ашигласан) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
@@ -126,18 +149,18 @@ def extract_info_from_file(file_obj, key):
             result = completion.choices[0].message.content
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
-            
-            # Утсан зураг хэт том байхаас сэргийлж жижиглэх (Мөн Alpha channel асуудлыг шийдвэрлэх)
             max_size = (1024, 1024)
             img.thumbnail(max_size)
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGB")
-                
+            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
             buf = io.BytesIO()
-            img.save(buf, format='JPEG', quality=85) # quality-г 85 болгож бага зэрэг шахаж хэмжээг нь жижиглэв
+            img.save(buf, format='JPEG', quality=85)
             img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             
-            completion = client.chat.completions.create(model="llama-3.2-90b-vision-preview", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}])
+            # ШИНЭ: Хуучин 90b-vision модель хаагдсан тул llama-4-scout модель ашиглах боллоо
+            completion = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct", 
+                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
+            )
             result = completion.choices[0].message.content
             if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
         else:
@@ -150,8 +173,9 @@ def extract_info_from_file(file_obj, key):
         return None, None, None, None, None, None
 
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
-tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "📋 Бүртгэлийн жагсаалт"])
+tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "👥 Харилцагчид"])
 
+# ================== TAB 1: Dashboard ==================
 with tab1:
     df = st.session_state.df_court
     cols = st.columns(4)
@@ -194,6 +218,7 @@ with tab1:
     else:
         st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
 
+# ================== TAB 2: Шинэ бүртгэл ==================
 with tab2:
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -255,12 +280,38 @@ with tab2:
                     st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 else: st.error("Зээлдэгчийн нэр хоосон байна!")
 
+# ================== TAB 3: Харилцагчид (Карт хэлбэрээр) ==================
 with tab3:
-    st.subheader("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
+    st.subheader("👥 Бүртгэлтэй харилцагчид")
+    view_mode = st.radio("Харах хэлбэр", ["Карт хэлбэрээр (Гоё)", "Хүснэгтээр (Засварлах)"], horizontal=True)
+    
     if not st.session_state.df_court.empty:
-        display_df = st.session_state.df_court.fillna("")
-        edited_df = st.data_editor(display_df, use_container_width=True, hide_index=True, num_rows="dynamic", column_config={"Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)})
-        st.session_state.df_court = edited_df
-        save_data()
+        if view_mode == "Хүснэгтээр (Засварлах)":
+            display_df = st.session_state.df_court.fillna("")
+            edited_df = st.data_editor(display_df, use_container_width=True, hide_index=True, num_rows="dynamic", column_config={"Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)})
+            st.session_state.df_court = edited_df
+            save_data()
+        else:
+            # Карт хэлбэрээр харуулах
+            cols = st.columns(2)
+            for idx, row in st.session_state.df_court.fillna("").iterrows():
+                status = row["Одоогийн төлөв"]
+                color = STATUS_COLORS.get(status, "#1f3a5f")
+                
+                card_html = f"""
+                <div class="client-card" style="border-left-color: {color};">
+                    <div class="client-name">{row['Зээлдэгч']} 
+                        <span class="status-badge" style="background-color: {color};">{status}</span>
+                    </div>
+                    <div class="info-row"><span class="info-label">👤 Хариуцсан:</span> {row['Хариуцсан ажилтан']}</div>
+                    <div class="info-row"><span class="info-label">📅 Шүүхэд өгсөн:</span> {row['Шүүхэд өгсөн огноо']}</div>
+                    <div class="info-row"><span class="info-label">🤝 Эвлэрүүлэнд өгсөн:</span> {row['Эвлэрүүлэнд өгсөн огноо']}</div>
+                    <div class="info-row"><span class="info-label">⚖️ Захирамж гарсан:</span> {row['Захирамж гарсан огноо']}</div>
+                    {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
+                </div>
+                """
+                # 2 баганатай карт хэлбэрээр харуулах
+                with cols[idx % 2]:
+                    st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
