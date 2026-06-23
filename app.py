@@ -32,11 +32,7 @@ st.markdown("""
     .warning { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
     .stDataFrame { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     
-    /* Харилцагчийн Карт үзэмж */
-    .client-card {
-        background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-        margin-bottom: 20px; border-left: 6px solid #1f3a5f; transition: transform 0.2s;
-    }
+    .client-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; border-left: 6px solid #1f3a5f; transition: transform 0.2s; }
     .client-name { font-size: 20px; font-weight: bold; color: #1f3a5f; margin-bottom: 10px; }
     .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; float: right; }
     .info-row { font-size: 14px; color: #555; margin-top: 8px; }
@@ -54,7 +50,6 @@ STATUS_OPTIONS = [
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", "Өр төлбөр дууссан"
 ]
 
-# Төлөв бүрийн өнгө
 STATUS_COLORS = {
     "Шүүхэд өгсөн": "#1f3a5f",
     "Эвлэрүүлэн зуучлалд өгсөн": "#8e44ad",
@@ -120,7 +115,7 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц (Шинэ модель ашигласан) ---
+# --- AI унших функц ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
@@ -128,38 +123,41 @@ def extract_info_from_file(file_obj, key):
     try:
         client = Groq(api_key=key)
         file_text = ""
-        prompt = """Энэхүү баримтаас дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
-        1. "type": Баримтын төрөл ("Шүүхийн нэхэмжлэл" эсвэл "Эвлэрүүлэн зуучлалын өргөдөл")
-        2. "name": Зээлдэгчийн буюу хариуцагчийн нэр (Овог нэр)
-        3. "court_date": Шүүхэд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null)
-        4. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null)
-        5. "order_date": Захирамж гарсан огноо (YYYY-MM-DD форматад, үгүй бол null)
-        6. "summary": Баримт бичгийн гол агуулгыг товч тодорхой 1-3 өгүүлбэрээр бич.
-        Зөвхөн JSON буцаа."""
+        
+        # Алдаагаас сэргийлж промптыг англиар бичив. Хариуг монголоор өгнө.
+        prompt = """Extract the following information from this document and return ONLY in JSON format:
+        1. "type": Document type ("Шүүхийн нэхэмжлэл" or "Эвлэрүүлэн зуучлалын өргөдөл")
+        2. "name": Debtor's or Defendant's full name in Mongolian (Surname Firstname)
+        3. "court_date": Date submitted to court in YYYY-MM-DD format (or null)
+        4. "mediation_date": Date submitted to mediation in YYYY-MM-DD format (or null)
+        5. "order_date": Order issue date in YYYY-MM-DD format (or null)
+        6. "summary": Briefly summarize the main content, claims, and requested amount in 1-3 sentences IN MONGOLIAN.
+        Return ONLY JSON, no markdown."""
 
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": prompt + "\n\nDocument text:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": prompt + "\n\nDocument text:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
             max_size = (1024, 1024)
             img.thumbnail(max_size)
-            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+                
             buf = io.BytesIO()
             img.save(buf, format='JPEG', quality=85)
-            img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            img_b64 = base64.b64encode(buf.getvalue()).decode('ascii')
             
-            # ШИНЭ: Хуучин 90b-vision модель хаагдсан тул llama-4-scout модель ашиглах боллоо
             completion = client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct", 
-                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
+                messages=[{"role": "system", "content": "You are a professional legal assistant."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
             )
             result = completion.choices[0].message.content
             if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
@@ -175,7 +173,6 @@ def extract_info_from_file(file_obj, key):
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
 tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "👥 Харилцагчид"])
 
-# ================== TAB 1: Dashboard ==================
 with tab1:
     df = st.session_state.df_court
     cols = st.columns(4)
@@ -218,7 +215,6 @@ with tab1:
     else:
         st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
 
-# ================== TAB 2: Шинэ бүртгэл ==================
 with tab2:
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -280,7 +276,6 @@ with tab2:
                     st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 else: st.error("Зээлдэгчийн нэр хоосон байна!")
 
-# ================== TAB 3: Харилцагчид (Карт хэлбэрээр) ==================
 with tab3:
     st.subheader("👥 Бүртгэлтэй харилцагчид")
     view_mode = st.radio("Харах хэлбэр", ["Карт хэлбэрээр (Гоё)", "Хүснэгтээр (Засварлах)"], horizontal=True)
@@ -292,7 +287,6 @@ with tab3:
             st.session_state.df_court = edited_df
             save_data()
         else:
-            # Карт хэлбэрээр харуулах
             cols = st.columns(2)
             for idx, row in st.session_state.df_court.fillna("").iterrows():
                 status = row["Одоогийн төлөв"]
@@ -310,7 +304,6 @@ with tab3:
                     {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
                 </div>
                 """
-                # 2 баганатай карт хэлбэрээр харуулах
                 with cols[idx % 2]:
                     st.markdown(card_html, unsafe_allow_html=True)
     else:
