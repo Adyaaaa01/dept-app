@@ -17,45 +17,19 @@ st.set_page_config(page_title="Өр нэхэмжлэх удирдлага", layo
 # --- Орчин үеийн өнгө үзэмж (CSS) ---
 st.markdown("""
     <style>
-    /* Үндсэн дэвсгэр өнгө */
     .main { background-color: #f0f2f6; }
-    
-    /* Гарчигнуудын өнгө */
     h1, h2, h3 { color: #1f3a5f; }
-    
-    /* Tab (хавтас) үзэмж */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; background-color: #ffffff; padding: 10px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .stTabs [data-baseweb="tab"] {
-        padding: 10px 20px; border-radius: 8px; background-color: #f0f2f6; color: #555; font-weight: bold;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #1f3a5f !important; color: white !important;
-    }
-    
-    /* Товчны үзэмж */
-    .stButton>button {
-        background: linear-gradient(90deg, #1f3a5f 0%, #2d5985 100%); color: white; 
-        border: none; border-radius: 8px; padding: 10px 24px; font-weight: bold;
-    }
-    .stButton>button:hover {
-        background: linear-gradient(90deg, #2d5985 0%, #1f3a5f 100%); color: white;
-    }
-    
-    /* Dashboard карт үзэмж */
-    .metric-card {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-        padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-        text-align: center; border-top: 4px solid #1f3a5f; margin-bottom: 15px;
-    }
+    .stTabs [data-baseweb="tab"] { padding: 10px 20px; border-radius: 8px; background-color: #f0f2f6; color: #555; font-weight: bold; }
+    .stTabs [aria-selected="true"] { background-color: #1f3a5f !important; color: white !important; }
+    .stButton>button { background: linear-gradient(90deg, #1f3a5f 0%, #2d5985 100%); color: white; border: none; border-radius: 8px; padding: 10px 24px; font-weight: bold; }
+    .stButton>button:hover { background: linear-gradient(90deg, #2d5985 0%, #1f3a5f 100%); color: white; }
+    .metric-card { background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: center; border-top: 4px solid #1f3a5f; margin-bottom: 15px; }
     .metric-num { font-size: 32px; font-weight: 800; color: #1f3a5f; }
     .metric-label { font-size: 14px; color: #666; font-weight: 500; margin-top: 5px; }
-    
-    /* Мэдэгдэлийн үзэмж */
     .alert-box { padding: 15px; border-radius: 8px; margin-bottom: 10px; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .danger { background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); }
     .warning { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
-    
-    /* Хүснэгтийн үзэмж */
     .stDataFrame { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     </style>
 """, unsafe_allow_html=True)
@@ -63,14 +37,12 @@ st.markdown("""
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
 st.markdown("##### Орчин үеийн шийдэл бүхий AI дэмжлэгтэй веб апп")
 
-# --- Үе шатын төлөвүүд ---
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
     "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", "Өр төлбөр дууссан"
 ]
 
-# --- Session State үүсгэх болон өгөгдөл хадгалах ---
 DATA_FILE = "court_data.csv"
 
 if 'df_court' not in st.session_state:
@@ -114,28 +86,22 @@ def to_excel(df):
         dashboard_data = {
             "Үзүүлэлт": ["Нийт хэрэг", "Шүүхэд өгсөн", "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэлд явж байгаа", "Өр дууссан", "Эвлэрүүлэнд өгсөн", "Эвлэрүүлэх захирамж дагуу төлж байгаа"],
             "Тоо": [
-                len(df), 
-                len(df[df["Одоогийн төлөв"] == "Шүүхэд өгсөн"]), 
-                len(df[df["Одоогийн төлөв"] == "Захирамж гарсан"]),
-                len(df[df["Одоогийн төлөв"] == "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]),
-                len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа"]),
-                len(df[df["Одоогийн төлөв"] == "Өр төлбөр дууссан"]),
-                len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалд өгсөн"]),
-                len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"])
+                len(df), len(df[df["Одоогийн төлөв"] == "Шүүхэд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Захирамж гарсан"]),
+                len(df[df["Одоогийн төлөв"] == "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]), len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа"]),
+                len(df[df["Одоогийн төлөв"] == "Өр төлбөр дууссан"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"])
             ]
         }
         pd.DataFrame(dashboard_data).to_excel(writer, index=False, sheet_name='Dashboard')
     return output.getvalue()
 
 if not st.session_state.df_court.empty:
-    st.sidebar.download_button(
-        label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court),
-        file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
+    st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 # --- AI унших функц ---
 def extract_info_from_file(file_obj, key):
-    if not key: return None, None, None, None, None, None
+    if not key: 
+        st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
+        return None, None, None, None, None, None
     try:
         client = Groq(api_key=key)
         file_text = ""
@@ -151,29 +117,27 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}],
-                response_format={"type": "json_object"}
-            )
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}],
-                response_format={"type": "json_object"}
-            )
+            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
             result = completion.choices[0].message.content
-        elif file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
+        elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
-            buf = io.BytesIO(); img.save(buf, format='JPEG')
+            
+            # Утсан зураг хэт том байхаас сэргийлж жижиглэх (Мөн Alpha channel асуудлыг шийдвэрлэх)
+            max_size = (1024, 1024)
+            img.thumbnail(max_size)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+                
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=85) # quality-г 85 болгож бага зэрэг шахаж хэмжээг нь жижиглэв
             img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-            completion = client.chat.completions.create(
-                model="llama-3.2-90b-vision-preview",
-                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
-            )
+            
+            completion = client.chat.completions.create(model="llama-3.2-90b-vision-preview", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}])
             result = completion.choices[0].message.content
             if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
         else:
@@ -181,17 +145,16 @@ def extract_info_from_file(file_obj, key):
 
         data = json.loads(result)
         return data.get("type"), data.get("name"), data.get("court_date"), data.get("mediation_date"), data.get("order_date"), data.get("summary", "")
-    except Exception:
+    except Exception as e:
+        st.error(f"AI уншихад алдаа гарлаа: {e}")
         return None, None, None, None, None, None
 
-# --- TAB ҮҮСГЭХ ХЭСЭГ (Excel шиг хавтаснууд) ---
+# --- TAB ҮҮСГЭХ ХЭСЭГ ---
 tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "📋 Бүртгэлийн жагсаалт"])
 
-# ================== TAB 1: Dashboard ==================
 with tab1:
     df = st.session_state.df_court
     cols = st.columns(4)
-    
     def get_count(status_name):
         if df.empty or "Одоогийн төлөв" not in df.columns: return 0
         return len(df[df["Одоогийн төлөв"] == status_name])
@@ -213,7 +176,6 @@ with tab1:
     st.subheader("🚨 AI Зөвлөх - Хугацааны мэдэгдэл")
     today = datetime.now().date()
     alerts = []
-
     if not df.empty:
         for idx, row in df.iterrows():
             if pd.notna(row["Захирамж гарсан огноо"]) and str(row["Захирамж гарсан огноо"]) != "":
@@ -225,7 +187,6 @@ with tab1:
                     elif days_left <= 7:
                         alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
                 except: pass
-
     if alerts:
         for alert in alerts:
             css_class, msg = alert.split("|", 1)
@@ -233,10 +194,8 @@ with tab1:
     else:
         st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
 
-# ================== TAB 2: Шинэ бүртгэл ==================
 with tab2:
     col1, col2 = st.columns([1, 2])
-    
     with col1:
         st.subheader("📄 Олон файл зэрэг оруулах")
         uploaded_files = st.file_uploader("Олон файл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
@@ -255,7 +214,6 @@ with tab2:
                                 except: mediation_date = ""
                                 try: order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else ""
                                 except: order_date = ""
-                                
                                 current_status = "Эвлэрүүлэн зуучлалд өгсөн" if doc_type == "Эвлэрүүлэн зуучлалын өргөдөл" else "Шүүхэд өгсөн"
                                 new_id = len(st.session_state.df_court) + 1
                                 new_data = {
@@ -297,17 +255,11 @@ with tab2:
                     st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 else: st.error("Зээлдэгчийн нэр хоосон байна!")
 
-# ================== TAB 3: Жагсаалт ==================
 with tab3:
     st.subheader("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
     if not st.session_state.df_court.empty:
         display_df = st.session_state.df_court.fillna("")
-        edited_df = st.data_editor(
-            display_df, use_container_width=True, hide_index=True, num_rows="dynamic",
-            column_config={
-                "Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)
-            }
-        )
+        edited_df = st.data_editor(display_df, use_container_width=True, hide_index=True, num_rows="dynamic", column_config={"Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)})
         st.session_state.df_court = edited_df
         save_data()
     else:
