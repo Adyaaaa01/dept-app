@@ -132,20 +132,20 @@ if not st.session_state.df_court.empty:
 # --- БҮГДИЙГ УСТГАХ ТОVЧ ---
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_container_width=True):
-    st.session_state.df_court = pd.DataFrame(columns=["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"])
+    st.session_state.df_court = pd.DataFrame(columns=required_cols)
     if os.path.exists(DATA_FILE):
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Ухаалаг Retry системтэй) ---
-def generate_with_retry(model, prompt_parts, max_retries=5):
+# --- AI унших функц (gemini-1.5-flash Ухаалаг Retry системтэй) ---
+def generate_with_retry(model, prompt_parts, max_retries=4):
     for attempt in range(max_retries):
         try:
             return model.generate_content(prompt_parts, request_options={"timeout": 120})
         except Exception as e:
             if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 30 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
-                time.sleep(30)
+                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 60 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
+                time.sleep(60)
             else:
                 raise e
 
@@ -155,7 +155,7 @@ def extract_info_from_file(file_obj, key):
         return None, None, None, None, None, None, None, None
     try:
         genai.configure(api_key=key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
@@ -295,7 +295,7 @@ with tab2:
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
                                 if i < len(uploaded_files) - 1:
-                                    time.sleep(10)
+                                    time.sleep(10) # Файл хооронд 10 секунд хүлээх
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
@@ -333,7 +333,6 @@ with tab3:
     if not st.session_state.df_court.empty:
         if view_mode == "Хүснэгтээр (Засварлах)":
             display_df = st.session_state.df_court.fillna("").copy()
-            # 1,1ээр нь устгах боломжтой болгох тэмдэглэээний багана нэмэх
             if "Устгах" not in display_df.columns:
                 display_df.insert(0, "Устгах", False)
                 
@@ -348,38 +347,7 @@ with tab3:
                 }
             )
             
-            # Хэрэв тэмдэглэсэн мөр байвал устгах товч гаргах
             rows_to_delete = edited_df[edited_df["Устгах"] == True]
             if not rows_to_delete.empty:
                 st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
-                if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
-                    # Устгах тэмдэглээгүй мөрүүдийг үлдээж хадгалах
-                    st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
-                    save_data()
-                    st.rerun()
-            else:
-                # Устгах юм байхгүй бол өөрчлөлтүүдийг л хадгалах
-                st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
-                save_data()
-        else:
-            cols = st.columns(2)
-            for idx, row in st.session_state.df_court.fillna("").iterrows():
-                status = row["Одоогийн төлөв"]
-                color = STATUS_COLORS.get(status, "#1f3a5f")
-                
-                card_html = f"""
-                <div class="client-card" style="border-left-color: {color};">
-                    <div class="client-name">{row['Зээлдэгч']} 
-                        <span class="status-badge" style="background-color: {color};">{status}</span>
-                    </div>
-                    <div class="info-row"><span class="info-label">👤 Хариуцсан:</span> {row['Хариуцсан ажилтан']}</div>
-                    <div class="info-row"><span class="info-label">📅 Шүүхэд өгсөн:</span> {row['Шүүхэд өгсөн огноо']}</div>
-                    <div class="info-row"><span class="info-label">🤝 Эвлэрүүлэнд өгсөн:</span> {row['Эвлэрүүлэнд өгсөн огноо']}</div>
-                    <div class="info-row"><span class="info-label">⚖️ Захирамж гарсан:</span> {row['Захирамж гарсан огноо']}</div>
-                    {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
-                </div>
-                """
-                with cols[idx % 2]:
-                    st.markdown(card_html, unsafe_allow_html=True)
-    else:
-        st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
+                if st.button(f"❌ Сонгосон {len(rows_to_delete)} х
