@@ -3,6 +3,5 @@ pandas
 openpyxl
 python-docx
 pdfplumber
-groq
+google-generativeai
 Pillow
-pytesseract
