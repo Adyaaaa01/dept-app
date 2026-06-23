@@ -4,12 +4,10 @@ from datetime import datetime
 import json
 import io
 import os
-import time
 import re
 import docx
 import pdfplumber
-from groq import Groq
-import base64
+import google.generativeai as genai
 from PIL import Image
 
 # --- Хуудасны тохиргоо ---
@@ -43,7 +41,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Орчин үеийн шийдэл бүхий AI дэмжлэгтэй веб апп")
+st.markdown("##### Google Gemini AI дэмжлэгтэй, нарийн шинжилгээтэй веб апп")
 
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
@@ -82,7 +80,7 @@ def save_data():
 
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
-api_key = st.sidebar.text_input("Groq API Key оруулна уу", type="password", help="console.groq.com сайтад бүртгүүлж үнэгүй key авна уу.")
+api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу.")
 
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Файл оруулах/Татах")
@@ -116,67 +114,61 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц (Нарийвчилсан Промпттай) ---
+# --- AI унших функц (Gemini 1.5 Pro ашигласан) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
-        st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
-        return None, None, None, None, None, None, None, None, None
+        st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
+        return None, None, None, None, None, None, None, None
     try:
-        client = Groq(api_key=key)
-        file_text = ""
+        genai.configure(api_key=key)
+        # Хамгийн хүчирхэг загвар
+        model = genai.GenerativeModel('gemini-1.5-pro')
         
+        file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
         1. "doc_type": Баримтын төрөл ("Шүүхийн нэхэмжлэл", "Эвлэрүүлэн зуучлалын өргөдөл", эсвэл "Гүйцэтгэх захирамж").
-        2. "name": Зээлдэгч буюу хариуцагчийн нэр (Овог Нэр).
-        3. "officer": Баримт бичиг дээр бичигдсэн хариуцсан ажилтан, төлөөлөгч эсвэл хуульчийн нэр. Олдоогүй бол null.
-        4. "status_hint": Баримтын агуулгаас хамаарч өөрийн төлвийг нь сонго. Зөвхөн эдгээрээс нэгийг сонго: ["Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]. Хэрэв илүү тодорхой мэдээлэл байхгүй бол "Шүүхэд өгсөн" гэж тооц.
-        5. "court_date": Шүүхэд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
+        2. "name": Өрнийн эзэн буюу ЗЭЭЛДЭГЧИЙН нэр (Овог Нэр). Хариуцагч, төлөөлөгчийн нэрийг бичиж болохгүй!
+        3. "officer": Баримт бичиг дээр "Итгэмжлэгдсэн төлөөлөгч", "Хуульч", "Гүйцэтгэлийн ажилтан" гэх зэргээр бичигдсэн хүний нэр. Хэрэв олдоогүй бол "null" гэж бич.
+        4. "status_hint": Баримтын агуулгаас хамаарч өөрийн төлвийг яг тогтоо. Зөвхөн эдгээрээс нэгийг сонго: ["Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Захирамж гарсан", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]. Хэрэв "гүйцэтгэх хуудас олгож өгнө үү", "гүйцэтгэх захирамж гаргаж" гэх мэт үг байвал заавал "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн" гэж тооц.
+        5. "court_date": Шүүхэд өгсөн эсвэл нэхэмжлэх гарсан огноо (YYYY-MM-DD форматад). Өөр огноо бүү бич.
         6. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
         7. "order_date": Захирамж гарсан огноо (YYYY-MM-DD форматад, үгүй бол null).
         8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич.
-        Зөвхөн JSON буцаа, ямар ч нэмэлт тайлбар бичихгүй."""
+        Зөвхөн JSON буцаа."""
 
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
-            result = completion.choices[0].message.content
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            completion = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}], response_format={"type": "json_object"})
-            result = completion.choices[0].message.content
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
+            # Хэт том зураг хязгаарлуулах вий гэж жижиглэх
             max_size = (1024, 1024)
             img.thumbnail(max_size)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
                 
-            buf = io.BytesIO()
-            img.save(buf, format='JPEG', quality=85)
-            img_b64 = base64.b64encode(buf.getvalue()).decode('ascii')
-            
-            # Зургийн хувьд хамгийн хүчирхэг модель ашиглаж байна
-            completion = client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct", 
-                messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм. Зургийг маш нарийнаар шинжил."}, {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}]}]
-            )
-            result = completion.choices[0].message.content
-            if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
+            response = model.generate_content([prompt, img])
         else:
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None
 
+        result = response.text.strip()
+        if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
+            
         json_match = re.search(r'\{.*\}', result, re.DOTALL)
         if json_match:
             result = json_match.group(0)
         else:
-            return None, None, None, None, None, None, None, None, None
+            return None, None, None, None, None, None, None, None
 
         data = json.loads(result)
         doc_type = data.get("doc_type", "Шүүхийн нэхэмжлэл")
         name = data.get("name")
-        officer = data.get("officer") if data.get("officer") and data.get("officer") != "null" else "Б.Адъяабазар"
+        officer = data.get("officer") if data.get("officer") and data.get("officer") != "null" else "Тодорхой бус"
         status_hint = data.get("status_hint", "Шүүхэд өгсөн")
         
         c_date = data.get("court_date")
@@ -188,7 +180,7 @@ def extract_info_from_file(file_obj, key):
             
     except Exception as e:
         st.error(f"AI уншихад алдаа гарлаа: {e}")
-        return None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None
 
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
 tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "👥 Харилцагчид"])
@@ -242,7 +234,7 @@ with tab2:
         uploaded_files = st.file_uploader("Олон файл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
         if st.button("🤖 Бүх файлыг AI-аар уншуулах", use_container_width=True):
             if uploaded_files:
-                if not api_key: st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
+                if not api_key: st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
                 else:
                     progress_bar = st.progress(0); success_count = 0
                     for i, file_obj in enumerate(uploaded_files):
@@ -256,7 +248,6 @@ with tab2:
                                 try: order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else ""
                                 except: order_date = ""
                                 
-                                # Төлөв сонголтыг зөв таних
                                 if status_hint not in STATUS_OPTIONS:
                                     current_status = "Эвлэрүүлэн зуучлалд өгсөн" if "эвлэр" in status_hint.lower() else "Шүүхэд өгсөн"
                                 else:
@@ -272,6 +263,7 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
+                                time.sleep(2) # Хязгаар дуусахаас сэргийлэх
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
