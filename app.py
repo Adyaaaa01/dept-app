@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import io
 import os
-import time    # ЭНЭ МОРИЙГ НЭМЭХ
+import time
 import re
 import docx
 import pdfplumber
@@ -62,6 +62,7 @@ STATUS_COLORS = {
 }
 
 DATA_FILE = "court_data.csv"
+API_KEY_FILE = "api_key.txt"
 
 if 'df_court' not in st.session_state:
     if os.path.exists(DATA_FILE):
@@ -81,7 +82,21 @@ def save_data():
 
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
-api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу.")
+
+# API Key-ийг файлд хадгалах (Хуудас refresh хийхэд алга болохгүй)
+if 'api_key' not in st.session_state:
+    if os.path.exists(API_KEY_FILE):
+        with open(API_KEY_FILE, 'r') as f:
+            st.session_state.api_key = f.read().strip()
+    else:
+        st.session_state.api_key = ""
+
+api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", value=st.session_state.api_key, type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу. Оруулсны дараа Enter дарна уу.")
+if api_key != st.session_state.api_key:
+    st.session_state.api_key = api_key
+    if api_key:
+        with open(API_KEY_FILE, 'w') as f:
+            f.write(api_key)
 
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Файл оруулах/Татах")
@@ -115,15 +130,15 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц (Gemini 1.5 Pro ашигласан) ---
+# --- AI унших функц ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
         return None, None, None, None, None, None, None, None
     try:
         genai.configure(api_key=key)
-        # Хамгийн хүчирхэг загвар
-        model = genai.GenerativeModel('gemini-flash-latest')
+        # Хязгаар өндөр (1500/өдөр) модель ашиглах
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
@@ -140,20 +155,19 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
-            # Хэт том зураг хязгаарлуулах вий гэж жижиглэх
             max_size = (1024, 1024)
             img.thumbnail(max_size)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
                 
-            response = model.generate_content([prompt, img])
+            response = model.generate_content([prompt, img], request_options={"timeout": 60})
         else:
             return None, None, None, None, None, None, None, None
 
@@ -264,7 +278,6 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
-                                time.sleep(2) # Хязгаар дуусахаас сэргийлэх
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
