@@ -30,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Groq AI (Llama) дэмжлэгтэй хөнгөн бөгөөд хэрэглэхэд хялбар веб апп")
+st.markdown("##### Groq AI дэмжлэгтэй хөнгөн бөгөөд хэрэглэхэд хялбар веб апп")
 
 # --- Үе шатын төлөвүүд ---
 STATUS_OPTIONS = [
@@ -51,7 +51,7 @@ if 'df_court' not in st.session_state:
     if os.path.exists(DATA_FILE):
         try:
             st.session_state.df_court = pd.read_csv(DATA_FILE)
-            required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
+            required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
             for col in required_cols:
                 if col not in st.session_state.df_court.columns:
                     st.session_state.df_court[col] = ""
@@ -60,7 +60,7 @@ if 'df_court' not in st.session_state:
     else:
         st.session_state.df_court = pd.DataFrame(columns=[
             "№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", 
-            "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"
+            "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"
         ])
 
 def save_data():
@@ -124,17 +124,20 @@ st.markdown("---")
 # --- 1. AI ашиглан Олон файл уншуулах (Groq - Llama) ---
 def extract_info_from_file(file_obj, key):
     if not key:
-        return None, None, None, None
+        return None, None, None, None, None
     
     try:
         client = Groq(api_key=key)
         
         file_text = ""
+        # Промптод төрлийг ялгаж огноог тус тусд нь танихыг заасан
         prompt = """Энэхүү баримтаас дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
-        1. "name": Зээлдэгчийн буюу хариуцагчийн нэр (Овог нэр)
-        2. "court_date": Шүүхэд шилжүүлсэн эсвэл өгсөн огноо (YYYY-MM-DD форматад)
-        3. "order_date": Захирамж гарсан огноо (Олдоогүй бол null гэж бичнэ үү) (YYYY-MM-DD форматад)
-        4. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр бич.
+        1. "type": Баримтын төрөл ("Шүүхийн нэхэмжлэл" эсвэл "Эвлэрүүлэн зуучлалын өргөдөл")
+        2. "name": Зээлдэгчийн буюу хариуцагчийн нэр (Овог нэр)
+        3. "court_date": Хэрэв шүүхийн нэхэмжлэл бол шүүхэд өгсөн огноо. Бусад тохиолдолд null (YYYY-MM-DD форматад)
+        4. "mediation_date": Хэрэв эвлэрүүлэн зуучлалын өргөдөл бол эвлэрүүлэнд өгсөн огноо. Бусад тохиолдолд null (YYYY-MM-DD форматад)
+        5. "order_date": Захирамж гарсан огноо (Хэрэв олдоогүй бол null гэж бичнэ үү) (YYYY-MM-DD форматад)
+        6. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр бич.
         Бусад тайлбаргүй зөвхөн JSON буцаа."""
 
         if file_obj.name.endswith('.docx'):
@@ -168,7 +171,6 @@ def extract_info_from_file(file_obj, key):
             
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
             img = Image.open(file_obj)
-            # Зургийг base64 болгох
             buf = io.BytesIO()
             img.save(buf, format='JPEG')
             img_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
@@ -184,18 +186,17 @@ def extract_info_from_file(file_obj, key):
                 ]
             )
             result = completion.choices[0].message.content
-            # JSON-ыг цэвэрлэх
             if result.startswith("```json"):
                 result = result.replace("```json", "").replace("```", "").strip()
             
         else:
-            return None, None, None, None
+            return None, None, None, None, None
 
         data = json.loads(result)
-        return data.get("name"), data.get("court_date"), data.get("order_date"), data.get("summary", "")
+        return data.get("type"), data.get("name"), data.get("court_date"), data.get("mediation_date"), data.get("order_date"), data.get("summary", "")
             
     except Exception as e:
-        return None, None, None, None
+        return None, None, None, None, None, None
 
 # --- 2. Олон файл зэрэг бүртгэх хэсэг ---
 st.header("📄 Шинэ нэхэмжлэл / Захирамж бүртгэх (Олон файл зэрэг оруулах)")
@@ -214,27 +215,40 @@ with col1:
                 
                 for i, file_obj in enumerate(uploaded_files):
                     with st.spinner(f"Уншиж байна: {file_obj.name}..."):
-                        name, c_date, o_date, summary = extract_info_from_file(file_obj, api_key)
+                        doc_type, name, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
                         
                         if name:
+                            # Огноонуудыг форматлах
                             try:
-                                court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date else datetime.now().date()
+                                court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date and c_date != "null" else ""
                             except:
-                                court_date = datetime.now().date()
+                                court_date = ""
                                 
                             try:
-                                order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else None
+                                mediation_date = datetime.strptime(m_date, "%Y-%m-%d").date() if m_date and m_date != "null" else ""
                             except:
-                                order_date = None
+                                mediation_date = ""
+                                
+                            try:
+                                order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else ""
+                            except:
+                                order_date = ""
                             
+                            # Баримтын төрөлд тааруулж төлөв сонгох
+                            if doc_type == "Эвлэрүүлэн зуучлалын өргөдөл":
+                                current_status = "Эвлэрүүлэн зуучлалд өгсөн"
+                            else:
+                                current_status = "Шүүхэд өгсөн"
+                                
                             new_id = len(st.session_state.df_court) + 1
                             new_data = {
                                 "№": new_id,
                                 "Зээлдэгч": name,
                                 "Хариуцсан ажилтан": "Б.Адъяабазар",
-                                "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
+                                "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d") if court_date else "",
+                                "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d") if mediation_date else "",
                                 "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
-                                "Одоогийн төлөв": "Шүүхэд өгсөн",
+                                "Одоогийн төлөв": current_status,
                                 "Тэмдэглэл": summary if summary else ""
                             }
                             st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
@@ -254,9 +268,11 @@ with col2:
     with st.form("burtgeh_form"):
         name = st.text_input("Зээлдэгчийн нэр", value=st.session_state.get('temp_name', ''))
         
-        c_col, o_col = st.columns(2)
+        c_col, m_col, o_col = st.columns(3)
         with c_col:
             court_date = st.date_input("Шүүхэд өгсөн огноо", value=st.session_state.get('temp_c_date', datetime.now()))
+        with m_col:
+            mediation_date = st.date_input("Эвлэрүүлэнд өгсөн огноо", value=st.session_state.get('temp_m_date', datetime.now()))
         with o_col:
             order_date = st.date_input("Захирамж гарсан огноо (Хоосон орхиж болно)", value=st.session_state.get('temp_o_date', None))
         
@@ -273,6 +289,7 @@ with col2:
                     "Зээлдэгч": name,
                     "Хариуцсан ажилтан": officer,
                     "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
+                    "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d"),
                     "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
                     "Одоогийн төлөв": status,
                     "Тэмдэглэл": note
@@ -280,7 +297,7 @@ with col2:
                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                 save_data()
                 st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
-                for key in ['temp_name', 'temp_c_date', 'temp_o_date', 'temp_note']:
+                for key in ['temp_name', 'temp_c_date', 'temp_m_date', 'temp_o_date', 'temp_note']:
                     if key in st.session_state: del st.session_state[key]
             else:
                 st.error("Зээлдэгчийн нэр хоосон байна!")
@@ -303,10 +320,17 @@ if not st.session_state.df_court.empty:
                     alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
             except:
                 pass
+
+if alerts:
+    for alert in alerts:
+        css_class, msg = alert.split("|", 1)
+        st.markdown(f'<div class="alert-box {css_class}">{msg}</div>', unsafe_allow_html=True)
+else:
+    st.info("ℹ️ Хугацаа дуусаж байгаа захирамж алга байна.")
+
 # --- 4. Бүртгэлийн жагсаалт (Шууд засварлах боломжтой) ---
 st.header("📋 Бүртгэлийн жагсаалт (Төлвийг шууд өөрчилж болно)")
 if not st.session_state.df_court.empty:
-    # Хоосон утгуудыг цэвэрлэх (Алдаа гарахаас сэргийлэх)
     display_df = st.session_state.df_court.fillna("")
     
     edited_df = st.data_editor(
