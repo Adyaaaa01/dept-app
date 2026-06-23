@@ -8,11 +8,16 @@ import time
 import re
 import docx
 import pdfplumber
-import google.generativeai as genai
+from groq import Groq
+import base64
 from PIL import Image
+import pytesseract
 
 # --- Хуудасны тохиргоо ---
 st.set_page_config(page_title="Өр нэхэмжлэх удирдлага", layout="wide", page_icon="⚖️")
+
+# Tesseract-ийн замыг зааж өгөх (Streamlit Cloud-д)
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
 # --- Орчин үеийн өнгө үзэмж (CSS) ---
 st.markdown("""
@@ -42,7 +47,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Google Gemini AI дэмжлэгтэй, нарийн шинжилгээтэй веб апп")
+st.markdown("##### Tesseract OCR + Groq AI дэмжлэгтэй, хязгааргүй веб апп")
 
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
@@ -83,7 +88,6 @@ def save_data():
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
 
-# API Key-ийг файлд хадгалах (Хуудас refresh хийхэд алга болохгүй)
 if 'api_key' not in st.session_state:
     if os.path.exists(API_KEY_FILE):
         with open(API_KEY_FILE, 'r') as f:
@@ -91,7 +95,7 @@ if 'api_key' not in st.session_state:
     else:
         st.session_state.api_key = ""
 
-api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", value=st.session_state.api_key, type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу. Оруулсны дараа Enter дарна уу.")
+api_key = st.sidebar.text_input("Groq API Key оруулна уу", value=st.session_state.api_key, type="password", help="console.groq.com сайтад бүртгүүлж үнэгүй key авна уу. Оруулсны дараа Enter дарна уу.")
 if api_key != st.session_state.api_key:
     st.session_state.api_key = api_key
     if api_key:
@@ -130,30 +134,16 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-# --- AI унших функц (Smart Retry системтэй) ---
-def generate_with_retry(model, prompt_parts, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            return model.generate_content(prompt_parts, request_options={"timeout": 90})
-        except Exception as e:
-            # Хэрэв 429 (Quota) алдаа гарвал 20 секунд хүлээж дахин оролдоно
-            if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"AI-н хязгаар хэтэрсэн тул 20 секунд хүлээж байна... ({attempt+1}/3)")
-                time.sleep(20)
-            else:
-                raise e
-
+# --- AI унших функц (Tesseract OCR + Groq Text) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
-        st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
+        st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
         return None, None, None, None, None, None, None, None
     try:
-        genai.configure(api_key=key)
-        # Хамгийн хүчирхэг бөгөөд хязгаар өндөр модель
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        
+        client = Groq(api_key=key)
         file_text = ""
-        prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
+        
+        prompt = """Энэхүү баримт бичгийн текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
         1. "doc_type": Баримтын төрөл ("Шүүхийн нэхэмжлэл", "Эвлэрүүлэн зуучлалын өргөдөл", эсвэл "Гүйцэтгэх захирамж").
         2. "name": Өрнийн эзэн буюу ЗЭЭЛДЭГЧИЙН нэр (Овог Нэр). Хариуцагч, төлөөлөгчийн нэрийг бичиж болохгүй!
         3. "officer": Баримт бичиг дээр "Итгэмжлэгдсэн төлөөлөгч", "Хуульч", "Гүйцэтгэлийн ажилтан" гэх зэргээр бичигдсэн хүний нэр. Хэрэв олдоогүй бол "null" гэж бич.
@@ -164,27 +154,37 @@ def extract_info_from_file(file_obj, key):
         8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич.
         Зөвхөн JSON буцаа."""
 
+        # Word файл унших
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
+            
+        # PDF файл унших
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
+                    
+        # Зураг унших (Tesseract OCR ашиглан Монгол текстийг таньна)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
-            max_size = (1024, 1024)
-            img.thumbnail(max_size)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-                
-            response = generate_with_retry(model, [prompt, img])
+            # Зургийг томруулж унших нарийвчлалыг нэмэгдүүлэх
+            img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+            file_text = pytesseract.image_to_string(img, lang='mon')
+            
         else:
             return None, None, None, None, None, None, None, None
 
-        result = response.text.strip()
-        if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
+        if not file_text.strip():
+            st.warning("Зураг дотроос текст илрээгүй. Өөр тод зураг оруулна уу.")
+            return None, None, None, None, None, None, None, None
+
+        # Уншсан текстээ Groq AI-д өгч шинжилүүлэх
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": "Та гүйцэтгэлийн мэргэжилтэн юм."}, {"role": "user", "content": prompt + "\n\nБаримтын текст:\n" + file_text}],
+            response_format={"type": "json_object"}
+        )
+        result = completion.choices[0].message.content
             
         json_match = re.search(r'\{.*\}', result, re.DOTALL)
         if json_match:
@@ -261,7 +261,7 @@ with tab2:
         uploaded_files = st.file_uploader("Олон файл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
         if st.button("🤖 Бүх файлыг AI-аар уншуулах", use_container_width=True):
             if uploaded_files:
-                if not api_key: st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
+                if not api_key: st.error("⚠️ Зүүн талын цэснээс Groq API Key оруулна уу!")
                 else:
                     progress_bar = st.progress(0); success_count = 0
                     for i, file_obj in enumerate(uploaded_files):
@@ -290,9 +290,6 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
-                                # Файл хооронд 5 секунд хүлээж хязгаар дуусахаас сэргийлэх
-                                if i < len(uploaded_files) - 1:
-                                    time.sleep(5)
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
                         progress_bar.progress((i + 1) / len(uploaded_files))
                     st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
