@@ -20,37 +20,47 @@ UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- Орчин үеийн өнгө үзэмж (CSS) ---
+# --- Орчин үеийн өнгө үзэмж (CSS) + Утасны (Mobile) тохиргоо ---
 st.markdown("""
     <style>
     .main { background-color: #f0f2f6; }
     h1, h2, h3 { color: #1f3a5f; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; background-color: #ffffff; padding: 10px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .stTabs [data-baseweb="tab"] { padding: 10px 20px; border-radius: 8px; background-color: #f0f2f6; color: #555; font-weight: bold; }
+    .stTabs [data-baseweb="tab-list"] { gap: 5px; background-color: #ffffff; padding: 5px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex-wrap: wrap; }
+    .stTabs [data-baseweb="tab"] { padding: 8px 12px; border-radius: 8px; background-color: #f0f2f6; color: #555; font-weight: bold; font-size: 14px; }
     .stTabs [aria-selected="true"] { background-color: #1f3a5f !important; color: white !important; }
-    .stButton>button { background: linear-gradient(90deg, #1f3a5f 0%, #2d5985 100%); color: white; border: none; border-radius: 8px; padding: 10px 24px; font-weight: bold; }
+    .stButton>button { background: linear-gradient(90deg, #1f3a5f 0%, #2d5985 100%); color: white; border: none; border-radius: 8px; padding: 10px 24px; font-weight: bold; width: 100%; }
     .stButton>button:hover { background: linear-gradient(90deg, #2d5985 0%, #1f3a5f 100%); color: white; }
-    .metric-card { background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: center; border-top: 4px solid #1f3a5f; margin-bottom: 15px; }
-    .metric-num { font-size: 32px; font-weight: 800; color: #1f3a5f; }
-    .metric-label { font-size: 14px; color: #666; font-weight: 500; margin-top: 5px; }
-    .alert-box { padding: 15px; border-radius: 8px; margin-bottom: 10px; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    
+    .metric-card { background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: center; border-top: 4px solid #1f3a5f; margin-bottom: 15px; }
+    .metric-num { font-size: 28px; font-weight: 800; color: #1f3a5f; }
+    .metric-label { font-size: 13px; color: #666; font-weight: 500; margin-top: 5px; }
+    
+    .alert-box { padding: 15px; border-radius: 8px; margin-bottom: 10px; color: white; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 14px; }
     .danger { background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); }
     .warning { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
-    .stDataFrame { border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
     
-    .client-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; border-left: 6px solid #1f3a5f; transition: transform 0.2s; }
-    .client-name { font-size: 20px; font-weight: bold; color: #1f3a5f; margin-bottom: 10px; }
-    .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; float: right; }
+    .client-card { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; border-left: 6px solid #1f3a5f; }
+    .client-name { font-size: 18px; font-weight: bold; color: #1f3a5f; margin-bottom: 10px; }
+    .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; color: white; float: right; }
     .info-row { font-size: 14px; color: #555; margin-top: 8px; }
     .info-label { font-weight: bold; color: #333; }
     .note-box { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; color: #666; border: 1px solid #e9ecef; }
     .img-container { margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef; }
     .img-container img { width: 100%; display: block; }
+
+    /* Утсанд зориулсан (Mobile Responsive) тохиргоо */
+    @media (max-width: 768px) {
+        .metric-num { font-size: 22px; }
+        .metric-label { font-size: 11px; }
+        .client-name { font-size: 16px; }
+        .stTabs [data-baseweb="tab"] { font-size: 12px; padding: 8px 6px; width: 100%; text-align: center; }
+        [data-testid="stHorizontalBlock"] { flex-direction: column !important; }
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Google Gemini AI дэмжлэгтэй, нарийн шинжилгээтэй веб апп")
+st.markdown("##### Google Gemini AI дэмжлэгтэй веб апп")
 
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", 
@@ -152,18 +162,7 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Ухаалаг Retry системтэй) ---
-def generate_with_retry(model, prompt_parts, max_retries=4):
-    for attempt in range(max_retries):
-        try:
-            return model.generate_content(prompt_parts, request_options={"timeout": 120})
-        except Exception as e:
-            if "429" in str(e) and attempt < max_retries - 1:
-                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 1 минут 30 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
-                time.sleep(90) # Хүлээх хугацааг 90 секунд болгож уртасгав
-            else:
-                raise e
-
+# --- AI унших функц (Хүлээлтгүй шууд ажилладаг) ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
@@ -193,18 +192,18 @@ def extract_info_from_file(file_obj, key):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = generate_with_retry(model, prompt + "\n\nБаримтын текст:\n" + file_text)
+            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text, request_options={"timeout": 60})
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
             img = Image.open(file_obj)
             max_size = (1024, 1024)
             img.thumbnail(max_size)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            response = generate_with_retry(model, [prompt, img])
+            response = model.generate_content([prompt, img], request_options={"timeout": 60})
         else:
             return None, None, None, None, None, None, None, None
 
@@ -231,11 +230,12 @@ def extract_info_from_file(file_obj, key):
         return doc_type, name, officer, status_hint, c_date, m_date, o_date, summary
             
     except Exception as e:
-        st.error(f"AI уншихад алдаа гарлаа: {e}")
+        # Хязгаар дууссан бол түр хүлээх биш, шууд алдааг харуулж дараагийн файл руу ордог болгов
+        st.error(f"Алдаа ({file_obj.name}): {e}")
         return None, None, None, None, None, None, None, None
 
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
-tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл (AI)", "👥 Харилцагчид"])
+tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл", "👥 Харилцагчид"])
 
 with tab1:
     df = st.session_state.df_court
@@ -323,12 +323,14 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
-                                # Олон файл оруулах үед хязгаарт хүрэхээс сэргийлж 15 секунд хүлээх
+                                # Хязгаар дуусахаас сэргийлж файл хооронд 5 секунд хүлээх (гэхдээ гацахгүй)
                                 if i < len(uploaded_files) - 1:
-                                    time.sleep(15)
-                            else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
+                                    time.sleep(5)
                         progress_bar.progress((i + 1) / len(uploaded_files))
-                    st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
+                    if success_count > 0:
+                        st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
+                    else:
+                        st.error("⚠️ Файл уншигдсангүй. API Key-ээ шалгана уу.")
             else: st.warning("Эхлээд файлуудаа оруулна уу.")
 
     with col2:
