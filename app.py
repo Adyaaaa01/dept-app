@@ -254,13 +254,12 @@ with tab1:
 
     st.markdown("---")
     
-    # ШИНЭ: Хариуцсан ажилтнаар ангилсан Дашбоард
+    # Хариуцсан ажилтнаар ангилсан Дашбоард
     st.subheader("👨‍💼 Хариуцсан ажилтнаар ангилсан бүртгэл")
     if not df.empty and "Хариуцсан ажилтан" in df.columns and "Одоогийн төлөв" in df.columns:
         officer_df = df.copy()
         officer_df["Хариуцсан ажилтан"] = officer_df["Хариуцсан ажилтан"].replace("", "Тодорхой бус").fillna("Тодорхой бус")
         
-        # Pivot хүснэгт үүсгэх (Ажилтан бүр дээр хэдэн хэрэг байгаа нь төлөвөөрөө ангилагдсан)
         pivot_df = officer_df.pivot_table(
             index="Хариуцсан ажилтан", 
             columns="Одоогийн төлөв", 
@@ -268,16 +267,13 @@ with tab1:
             fill_value=0
         ).reset_index()
         
-        # Нийт хэрэгийн тоог бодоод хамгийн баруун талд нь нэмэх
         pivot_df['Нийт хэрэг'] = pivot_df.drop(columns=['Хариуцсан ажилтан']).sum(axis=1)
-        
-        # Хүснэгтийг харуулах
         st.dataframe(pivot_df, use_container_width=True, hide_index=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("##### 📊 Хариуцсан ажилтны ажлын ачаалал (График)")
-        # График харуулах (Ажилтан бүрийн нийт хэрэгийн тоо)
-        chart_data = pivot_df.set_index("Хариуцсан ажилтан")["Нийт хэрэг"]
+        st.markdown("##### 📊 Хариуцсан ажилтны хэрэгүүдийн төлөв (Ямар ямар хэрэгтэй вэ?)")
+        # Статус бүрийн өнгөөр ялгасан давхар баганан график (Stacked bar chart)
+        chart_data = pivot_df.set_index("Хариуцсан ажилтан").drop(columns=['Нийт хэрэг'])
         if not chart_data.empty:
             st.bar_chart(chart_data)
     else:
@@ -392,8 +388,27 @@ with tab3:
                 st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
                 save_data()
         else:
+            # Карт хэлбэрээр хурдан гаргах (Хуудаслалт - Pagination)
+            PAGE_SIZE = 8
+            total_items = len(st.session_state.df_court)
+            total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
+            
+            if 'card_page' not in st.session_state:
+                st.session_state.card_page = 0
+            
+            if st.session_state.card_page >= total_pages:
+                st.session_state.card_page = 0
+                
+            start_idx = st.session_state.card_page * PAGE_SIZE
+            end_idx = min(start_idx + PAGE_SIZE, total_items)
+            
+            st.write(f"Нийт {total_items} харилцагчийн {start_idx+1}-{end_idx} харуулж байна (Хуудас {st.session_state.card_page + 1}/{total_pages})")
+            
             cols = st.columns(2)
-            for idx, row in st.session_state.df_court.fillna("").iterrows():
+            current_page_df = st.session_state.df_court.iloc[start_idx:end_idx].fillna("")
+            
+            display_idx = 0
+            for idx, row in current_page_df.iterrows():
                 status = row["Одоогийн төлөв"]
                 color = STATUS_COLORS.get(status, "#1f3a5f")
                 
@@ -421,7 +436,20 @@ with tab3:
                     {image_html}
                 </div>
                 """
-                with cols[idx % 2]:
+                with cols[display_idx % 2]:
                     st.markdown(card_html, unsafe_allow_html=True)
+                display_idx += 1
+                
+            # Хуудас солих товчнууд
+            st.markdown("---")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col1:
+                if st.button("⬅️ Өмнөх хуудас", use_container_width=True, disabled=(st.session_state.card_page == 0)):
+                    st.session_state.card_page -= 1
+                    st.rerun()
+            with col3:
+                if st.button("Дараагийн хуудас ➡️", use_container_width=True, disabled=(st.session_state.card_page >= total_pages - 1)):
+                    st.session_state.card_page += 1
+                    st.rerun()
     else:
         st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
