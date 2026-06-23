@@ -296,3 +296,10 @@ if not st.session_state.df_court.empty:
             try:
                 exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
                 days_left = (exp_date - today).days
+                
+                if days_left < 0:
+                    alerts.append(f"danger|🚨 <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{-days_left} хоногийн өмнө</b> дууссан! Яаралтай очиж уулзах шаардлагатай.")
+                elif days_left <= 7:
+                    alerts.append(f"warning|⏰ <b>{row['Зээлдэгч']}</b>-ийн захирамжийн хугацаа <b>{days_left} хоног</b> үлдлээ. Очиж уулзах бэлтгэл хийгээрэй.")
+            except:
+                pass
