@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import io
+import os
 import docx
 import pdfplumber
 import google.generativeai as genai
@@ -20,7 +21,7 @@ st.markdown("""
     .alert-box { padding: 15px; border-radius: 10px; margin-bottom: 10px; color: white; font-weight: bold; }
     .danger { background-color: #dc3545; }
     .warning { background-color: #ffc107; color: black; }
-    .metric-card { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+    .metric-card { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; margin-bottom: 10px; }
     .metric-num { font-size: 24px; font-weight: bold; color: #4CAF50; }
     .metric-label { font-size: 14px; color: #555; }
     </style>
@@ -41,17 +42,21 @@ STATUS_OPTIONS = [
     "Өр төлбөр дууссан"
 ]
 
-import os
 # --- Session State үүсгэх болон өгөгдөл хадгалах ---
 DATA_FILE = "court_data.csv"
 
 if 'df_court' not in st.session_state:
     # Хэрэв өмнө хадгалсан файл байвал түүнийг уншина
     if os.path.exists(DATA_FILE):
-        st.session_state.df_court = pd.read_csv(DATA_FILE)
-        # Хуучин өгөгдөлд багана дутуу байвал нэмж өгөх
-        if 'Одоогийн төлөв' not in st.session_state.df_court.columns:
-            st.session_state.df_court['Одоогийн төлөв'] = ''
+        try:
+            st.session_state.df_court = pd.read_csv(DATA_FILE)
+            # Хуучин өгөгдөлд багана дутуу байвал нэмж өгөх
+            required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"]
+            for col in required_cols:
+                if col not in st.session_state.df_court.columns:
+                    st.session_state.df_court[col] = ""
+        except Exception:
+            st.session_state.df_court = pd.DataFrame(columns=required_cols)
     else:
         # Анх удаа ажиллуулж байгаа бол хоосон хүснэгт үүсгэх
         st.session_state.df_court = pd.DataFrame(columns=[
@@ -74,6 +79,7 @@ if up_excel:
     try:
         df_import = pd.read_excel(up_excel)
         st.session_state.df_court = df_import
+        save_data()
         st.sidebar.success("Excel амжилттай уншигдлаа!")
     except Exception as e:
         st.sidebar.error(f"Алдаа: {e}")
@@ -82,8 +88,7 @@ def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Бүртгэл')
-    processed_data = output.getvalue()
-    return processed_data
+    return output.getvalue()
 
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(
@@ -98,9 +103,9 @@ st.header("📊 Хяналтын самбар")
 df = st.session_state.df_court
 cols = st.columns(4)
 
-# Самбарын тоонуудыг бодож гаргах
 def get_count(status_name):
-    if df.empty: return 0
+    if df.empty or "Одоогийн төлөв" not in df.columns: 
+        return 0
     return len(df[df["Одоогийн төлөв"] == status_name])
 
 with cols[0]:
@@ -204,7 +209,6 @@ with col2:
         with c_col:
             court_date = st.date_input("Шүүхэд өгсөн огноо", value=st.session_state.get('temp_c_date', datetime.now()))
         with o_col:
-            # Захирамж гараагүй бол хоосон орхих боломжтой болгох
             order_date = st.date_input("Захирамж гарсан огноо (Хоосон орхиж болно)", value=st.session_state.get('temp_o_date', None))
         
         status = st.selectbox("Одоогийн төлөв / Дараагийн хийх ажил", STATUS_OPTIONS, index=0)
@@ -215,27 +219,18 @@ with col2:
         if submitted:
             if name:
                 new_id = len(st.session_state.df_court) + 1
-    'if' st.button("Бүртгэх"):
-    'if' name:
-        new_data = {
-            ...
-        }
-    "Зээлдэгч": name,
-    "Шүүх": court_name,
-    "Шийдвэрийн дугаар": decision_no,
-    "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
-    "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
-    "Одоогийн төлөв": status,
-    "Тэмдэглэл": note
-        '}'
-
-st.session_state.df_court = pd.concat(
-    [st.session_state.df_court, pd.DataFrame([new_data])],
-    ignore_index=True
-)
-
-save_data()
-st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
+                new_data = {
+                    "№": new_id,
+                    "Зээлдэгч": name,
+                    "Хариуцсан ажилтан": officer,
+                    "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"),
+                    "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
+                    "Одоогийн төлөв": status,
+                    "Тэмдэглэл": note
+                }
+                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                save_data() # Өгөгдлийг файлд хадгалах
+                st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
                 # Түр зуурын өгөгдөл цэвэрлэх
                 for key in ['temp_name', 'temp_c_date', 'temp_o_date']:
                     if key in st.session_state: del st.session_state[key]
@@ -249,7 +244,7 @@ alerts = []
 
 if not st.session_state.df_court.empty:
     for idx, row in st.session_state.df_court.iterrows():
-        if pd.notna(row["Захирамж гарсан огноо"]) and row["Захирамж гарсан огноо"] != "":
+        if pd.notna(row["Захирамж гарсан огноо"]) and str(row["Захирамж гарсан огноо"]) != "":
             try:
                 exp_date = pd.to_datetime(row["Захирамж гарсан огноо"]).date()
                 days_left = (exp_date - today).days
@@ -288,5 +283,6 @@ if not st.session_state.df_court.empty:
     )
     # Хэрвээ хэрэглэгч засварласан бол session-д хадгалах
     st.session_state.df_court = edited_df
+    save_data() # Засварласан өгөгдлийг файлд хадгалах
 else:
     st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
