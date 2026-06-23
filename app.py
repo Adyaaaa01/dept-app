@@ -129,13 +129,20 @@ def to_excel(df):
 if not st.session_state.df_court.empty:
     st.sidebar.download_button(label="📥 Excel-ээ татах", data=to_excel(st.session_state.df_court), file_name='Шүүх_нэхэмжлэл_бүртгэл.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+# --- БҮГДИЙГ УСТГАХ ТОVЧ ---
+st.sidebar.markdown("---")
+if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_container_width=True):
+    st.session_state.df_court = pd.DataFrame(columns=["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл"])
+    if os.path.exists(DATA_FILE):
+        os.remove(DATA_FILE)
+    st.rerun()
+
 # --- AI унших функц (Ухаалаг Retry системтэй) ---
 def generate_with_retry(model, prompt_parts, max_retries=5):
     for attempt in range(max_retries):
         try:
             return model.generate_content(prompt_parts, request_options={"timeout": 120})
         except Exception as e:
-            # Хэрэв 429 (Хязгаар хэтэрсэн) алдаа гарвал 30 секунд хүлээж дахин оролдоно
             if "429" in str(e) and attempt < max_retries - 1:
                 st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 30 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
                 time.sleep(30)
@@ -287,7 +294,6 @@ with tab2:
                                 }
                                 st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
                                 save_data(); success_count += 1
-                                # Хязгаар дуусахаас сэргийлж файл хооронд 10 секунд хүлээх
                                 if i < len(uploaded_files) - 1:
                                     time.sleep(10)
                             else: st.warning(f"Алдаа: {file_obj.name} файлыг уншиж чадсангүй.")
@@ -326,10 +332,35 @@ with tab3:
     
     if not st.session_state.df_court.empty:
         if view_mode == "Хүснэгтээр (Засварлах)":
-            display_df = st.session_state.df_court.fillna("")
-            edited_df = st.data_editor(display_df, use_container_width=True, hide_index=True, num_rows="dynamic", column_config={"Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)})
-            st.session_state.df_court = edited_df
-            save_data()
+            display_df = st.session_state.df_court.fillna("").copy()
+            # 1,1ээр нь устгах боломжтой болгох тэмдэглэээний багана нэмэх
+            if "Устгах" not in display_df.columns:
+                display_df.insert(0, "Устгах", False)
+                
+            edited_df = st.data_editor(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                num_rows="fixed",
+                column_config={
+                    "Устгах": st.column_config.CheckboxColumn("Устгах", default=False),
+                    "Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)
+                }
+            )
+            
+            # Хэрэв тэмдэглэсэн мөр байвал устгах товч гаргах
+            rows_to_delete = edited_df[edited_df["Устгах"] == True]
+            if not rows_to_delete.empty:
+                st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
+                if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
+                    # Устгах тэмдэглээгүй мөрүүдийг үлдээж хадгалах
+                    st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
+                    save_data()
+                    st.rerun()
+            else:
+                # Устгах юм байхгүй бол өөрчлөлтүүдийг л хадгалах
+                st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
+                save_data()
         else:
             cols = st.columns(2)
             for idx, row in st.session_state.df_court.fillna("").iterrows():
