@@ -58,14 +58,13 @@ st.markdown("""
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
 st.markdown("##### Google Gemini AI дэмжлэгтэй веб апп")
 
-# Шинэ төлөв нэмэгдсэн: Шүүхийн шийдвэрийн зардалын гэрээ
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", 
     "Эвлэрүүлэн зуучлалд өгсөн", 
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
     "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон",
     "Захирамж гарсан", 
-    "Шүүхийн шийдвэрийн зардалын гэрээ", # ШИНЭ ТӨЛӨВ
+    "Шүүхийн шийдвэрийн зардалын гэрээ", 
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", 
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", 
@@ -78,7 +77,7 @@ STATUS_COLORS = {
     "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
     "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d",
     "Захирамж гарсан": "#f39c12",
-    "Шүүхийн шийдвэрийн зардалын гэрээ": "#16a085", # ШИНЭ ӨНГӨ
+    "Шүүхийн шийдвэрийн зардалын гэрээ": "#16a085",
     "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400",
     "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
     "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа": "#e74c3c",
@@ -162,7 +161,7 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
         os.remove(DATA_FILE)
     st.rerun()
 
-# --- AI унших функц (Нарийвчилсан промпттай) ---
+# --- AI унших функц ---
 def extract_info_from_file(file_obj, key):
     if not key: 
         st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
@@ -371,38 +370,66 @@ with tab2:
 
 with tab3:
     st.subheader("👥 Бүртгэлтэй харилцагчид")
+    
+    # Хайлт болон Шүүлтүүр (Фильтр) нэмэх
+    col_search1, col_search2 = st.columns([3, 2])
+    with col_search1:
+        search_query = st.text_input("🔍 Нэр эсвэл тэмдэглэлээр хайх", "")
+    with col_search2:
+        filter_status = st.selectbox("Төлөвөөр шүүх", ["Бүгд"] + STATUS_OPTIONS)
+        
+    # Өгөгдлийг шүүх
+    df_display = st.session_state.df_court.copy().fillna("")
+    if search_query:
+        df_display = df_display[df_display['Зээлдэгч'].str.contains(search_query, case=False) | df_display['Тэмдэглэл'].str.contains(search_query, case=False)]
+    if filter_status != "Бүгд":
+        df_display = df_display[df_display['Одоогийн төлөв'] == filter_status]
+        
     view_mode = st.radio("Харах хэлбэр", ["Карт хэлбэрээр (Гоё)", "Хүснэгтээр (Засварлах)"], horizontal=True)
     
-    if not st.session_state.df_court.empty:
+    if not df_display.empty:
         if view_mode == "Хүснэгтээр (Засварлах)":
-            display_df = st.session_state.df_court.fillna("").copy()
-            if "Устгах" not in display_df.columns:
-                display_df.insert(0, "Устгах", False)
+            # Хайлт орсон үед хүснэгтийг зөвхөн харах горимд (Read-only) харуулна, ингэснээр өнгө ялгаж харуулах боломжтой болно
+            if search_query or filter_status != "Бүгд":
+                st.info("ℹ️ Хайлтын үр дүн. Засвар хийхийн тулд эхлээд хайлтаа цэвэрлээрэй.")
                 
-            edited_df = st.data_editor(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
-                num_rows="fixed",
-                column_config={
-                    "Устгах": st.column_config.CheckboxColumn("Устгах", default=False),
-                    "Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)
-                }
-            )
-            
-            rows_to_delete = edited_df[edited_df["Устгах"] == True]
-            if not rows_to_delete.empty:
-                st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
-                if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
-                    st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
-                    save_data()
-                    st.rerun()
+                # Төлөв бүрийн өнгийг HTML таблицаар харуулах
+                def color_status(val):
+                    color = STATUS_COLORS.get(val, "#1f3a5f")
+                    return f'background-color: {color}; color: white; font-weight: bold;'
+                
+                styled_df = df_display.style.applymap(color_status, subset=['Одоогийн төлөв'])
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
-                st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
-                save_data()
+                display_df = st.session_state.df_court.fillna("").copy()
+                if "Устгах" not in display_df.columns:
+                    display_df.insert(0, "Устгах", False)
+                    
+                edited_df = st.data_editor(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    column_config={
+                        "Устгах": st.column_config.CheckboxColumn("Устгах", default=False),
+                        "Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)
+                    }
+                )
+                
+                rows_to_delete = edited_df[edited_df["Устгах"] == True]
+                if not rows_to_delete.empty:
+                    st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
+                    if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
+                        st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
+                        save_data()
+                        st.rerun()
+                else:
+                    st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
+                    save_data()
         else:
+            # Карт хэлбэрээр хурдан гаргах (Хуудаслалт - Pagination)
             PAGE_SIZE = 8
-            total_items = len(st.session_state.df_court)
+            total_items = len(df_display)
             total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
             
             if 'card_page' not in st.session_state:
@@ -417,7 +444,7 @@ with tab3:
             st.write(f"Нийт {total_items} харилцагчийн {start_idx+1}-{end_idx} харуулж байна (Хуудас {st.session_state.card_page + 1}/{total_pages})")
             
             cols = st.columns(2)
-            current_page_df = st.session_state.df_court.iloc[start_idx:end_idx].fillna("")
+            current_page_df = df_display.iloc[start_idx:end_idx]
             
             display_idx = 0
             for idx, row in current_page_df.iterrows():
@@ -463,4 +490,4 @@ with tab3:
                     st.session_state.card_page += 1
                     st.rerun()
     else:
-        st.warning("Бүртгэл хоосон байна. Шинэ нэхэмжлэл бүртгэнэ үү.")
+        st.warning("Хайлтын үр дүн хоосон байна.")
