@@ -7,6 +7,7 @@ import os
 import time
 import re
 import base64
+import requests
 import docx
 import pdfplumber
 import google.generativeai as genai
@@ -15,12 +16,11 @@ from PIL import Image
 # --- Хуудасны тохиргоо ---
 st.set_page_config(page_title="Өр нэхэмжлэх удирдлага", layout="wide", page_icon="⚖️")
 
-# Uploads фолдер үүсгэх
 UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- Орчин үеийн өнгө үзэмж (CSS) + Утасны (Mobile) тохиргоо ---
+# --- Орчин үеийн өнгө үзэмж (CSS) ---
 st.markdown("""
     <style>
     .main { background-color: #f0f2f6; }
@@ -44,7 +44,6 @@ st.markdown("""
     .img-container { margin-top: 15px; border-radius: 8px; overflow: hidden; border: 1px solid #e9ecef; }
     .img-container img { width: 100%; display: block; }
 
-    /* Утсанд зориулсан (Mobile Responsive) тохиргоо */
     @media (max-width: 768px) {
         .metric-num { font-size: 22px; }
         .metric-label { font-size: 11px; }
@@ -56,7 +55,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Google Gemini AI дэмжлэгтэй веб апп")
+st.markdown("##### Google Gemini AI дэмжлэгтэй, GitHub-тэй нөөцөлдөг веб апп")
 
 STATUS_OPTIONS = [
     "Шүүхэд өгсөн", 
@@ -88,21 +87,6 @@ DATA_FILE = "court_data.csv"
 API_KEY_FILE = "api_key.txt"
 required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл", "Файлын нэр"]
 
-if 'df_court' not in st.session_state:
-    if os.path.exists(DATA_FILE):
-        try:
-            st.session_state.df_court = pd.read_csv(DATA_FILE)
-            for col in required_cols:
-                if col not in st.session_state.df_court.columns:
-                    st.session_state.df_court[col] = ""
-        except Exception:
-            st.session_state.df_court = pd.DataFrame(columns=required_cols)
-    else:
-        st.session_state.df_court = pd.DataFrame(columns=required_cols)
-
-def save_data():
-    st.session_state.df_court.to_csv(DATA_FILE, index=False)
-
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
 
@@ -113,7 +97,7 @@ if 'api_key' not in st.session_state:
     else:
         st.session_state.api_key = ""
 
-api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", value=st.session_state.api_key, type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу. Оруулсны дараа Enter дарна уу.")
+api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", value=st.session_state.api_key, type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу.")
 if api_key != st.session_state.api_key:
     st.session_state.api_key = api_key
     if api_key:
@@ -121,7 +105,58 @@ if api_key != st.session_state.api_key:
             f.write(api_key)
 
 st.sidebar.markdown("---")
-st.sidebar.header("📁 Файл оруулах/Татах")
+st.sidebar.header("☁️ GitHub нөөц (Backup)")
+gh_token = st.sidebar.text_input("GitHub Token (ghp_...)", type="password", help="Өгөгдөл устахаас сэргийлж GitHub рүү нөөцлөнө.")
+gh_owner = st.sidebar.text_input("GitHub Username (нэр)", "Adyaaaa01")
+gh_repo = st.sidebar.text_input("GitHub Repo (нэр)", "dept-app")
+
+# --- GitHub Sync Функц ---
+def sync_to_github(df, owner, repo, token, path="court_data.csv"):
+    if not token or not owner or not repo: return False
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    r = requests.get(url, headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+    
+    content = df.to_csv(index=False).encode('utf-8')
+    content_b64 = base64.b64encode(content).decode('utf-8')
+    data = {"message": "Auto backup court_data", "content": content_b64, "sha": sha}
+    r = requests.put(url, headers=headers, json=data)
+    return r.status_code in [200, 201]
+
+def load_from_github(owner, repo, path="court_data.csv"):
+    url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{path}"
+    try:
+        df = pd.read_csv(url)
+        return df
+    except:
+        return None
+
+# --- Өгөгдөл ачаалах (GitHub-ээс татдаг болгов) ---
+if 'df_court' not in st.session_state:
+    gh_df = None
+    if gh_token and gh_owner and gh_repo:
+        gh_df = load_from_github(gh_owner, gh_repo)
+    
+    if gh_df is not None and not gh_df.empty:
+        st.session_state.df_court = gh_df
+        for col in required_cols:
+            if col not in st.session_state.df_court.columns:
+                st.session_state.df_court[col] = ""
+    else:
+        st.session_state.df_court = pd.DataFrame(columns=required_cols)
+
+def save_data():
+    st.session_state.df_court.to_csv(DATA_FILE, index=False)
+    if gh_token and gh_owner and gh_repo:
+        with st.spinner("☁️ GitHub рүү хадгалж байна..."):
+            if sync_to_github(st.session_state.df_court, gh_owner, gh_repo, gh_token):
+                st.sidebar.success("☁️ Нөөцлөгдлөө!")
+            else:
+                st.sidebar.error("⚠️ Нөөцлөхөд алдаа!")
+
+st.sidebar.markdown("---")
+st.sidebar.header("📁 Excel оруулах/Татах")
 up_excel = st.sidebar.file_uploader("Excel файлаас өгөгдөл татах", type=['xlsx'])
 if up_excel:
     try:
@@ -157,8 +192,7 @@ if not st.session_state.df_court.empty:
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_container_width=True):
     st.session_state.df_court = pd.DataFrame(columns=required_cols)
-    if os.path.exists(DATA_FILE):
-        os.remove(DATA_FILE)
+    save_data()
     st.rerun()
 
 # --- AI унших функц ---
@@ -258,19 +292,11 @@ with tab1:
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Өр төлбөр дууссан")}</div><div class="metric-label">Өр дууссан</div></div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    
     st.subheader("👨‍💼 Хариуцсан ажилтнаар ангилсан бүртгэл")
     if not df.empty and "Хариуцсан ажилтан" in df.columns and "Одоогийн төлөв" in df.columns:
         officer_df = df.copy()
         officer_df["Хариуцсан ажилтан"] = officer_df["Хариуцсан ажилтан"].replace("", "Тодорхой бус").fillna("Тодорхой бус")
-        
-        pivot_df = officer_df.pivot_table(
-            index="Хариуцсан ажилтан", 
-            columns="Одоогийн төлөв", 
-            aggfunc='size', 
-            fill_value=0
-        ).reset_index()
-        
+        pivot_df = officer_df.pivot_table(index="Хариуцсан ажилтан", columns="Одоогийн төлөв", aggfunc='size', fill_value=0).reset_index()
         pivot_df['Нийт хэрэг'] = pivot_df.drop(columns=['Хариуцсан ажилтан']).sum(axis=1)
         st.dataframe(pivot_df, use_container_width=True, hide_index=True)
         
@@ -309,7 +335,6 @@ with tab2:
                                     current_status = status_hint
 
                                 new_id = len(st.session_state.df_court) + 1
-                                
                                 existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
                                 count = sum(1 for n in existing_names if n.startswith(name))
                                 display_name = f"{name} ({count + 1})" if count > 0 else name
@@ -352,7 +377,6 @@ with tab2:
             if submitted:
                 if name:
                     new_id = len(st.session_state.df_court) + 1
-                    
                     existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
                     count = sum(1 for n in existing_names if n.startswith(name))
                     display_name = f"{name} ({count + 1})" if count > 0 else name
@@ -389,7 +413,6 @@ with tab3:
     
     if not df_display.empty:
         if view_mode == "Хүснэгтээр (Засварлах)":
-            # Хайлт орсон үед хүснэгтийг зөвхөн харах горимд (Read-only) харуулна, ингэснээр өнгө ялгаж харуулах боломжтой болно
             if search_query or filter_status != "Бүгд":
                 st.info("ℹ️ Хайлтын үр дүн. Засвар хийхийн тулд эхлээд хайлтаа цэвэрлээрэй.")
                 
