@@ -85,11 +85,13 @@ STATUS_COLORS = {
 
 DATA_FILE = "court_data.csv"
 API_KEY_FILE = "api_key.txt"
+GH_CONFIG_FILE = "github_config.json"
 required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл", "Файлын нэр"]
 
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
 
+# API Key-ийг файлд хадгалах
 if 'api_key' not in st.session_state:
     if os.path.exists(API_KEY_FILE):
         with open(API_KEY_FILE, 'r') as f:
@@ -106,9 +108,37 @@ if api_key != st.session_state.api_key:
 
 st.sidebar.markdown("---")
 st.sidebar.header("☁️ GitHub нөөц (Backup)")
-gh_token = st.sidebar.text_input("GitHub Token (ghp_...)", type="password", help="Өгөгдөл устахаас сэргийлж GitHub рүү нөөцлөнө.")
-gh_owner = st.sidebar.text_input("GitHub Username (нэр)", "Adyaaaa01")
-gh_repo = st.sidebar.text_input("GitHub Repo (нэр)", "dept-app")
+
+# GitHub тохиргоог файлд хадгалах (Шинээр нэмэгдсэн хэсэг)
+if 'gh_token' not in st.session_state or 'gh_owner' not in st.session_state or 'gh_repo' not in st.session_state:
+    if os.path.exists(GH_CONFIG_FILE):
+        try:
+            with open(GH_CONFIG_FILE, 'r') as f:
+                gh_config = json.load(f)
+                st.session_state.gh_token = gh_config.get("gh_token", "")
+                st.session_state.gh_owner = gh_config.get("gh_owner", "")
+                st.session_state.gh_repo = gh_config.get("gh_repo", "")
+        except:
+            st.session_state.gh_token = ""
+            st.session_state.gh_owner = ""
+            st.session_state.gh_repo = ""
+    else:
+        st.session_state.gh_token = ""
+        st.session_state.gh_owner = ""
+        st.session_state.gh_repo = ""
+
+gh_token = st.sidebar.text_input("GitHub Token (ghp_...)", value=st.session_state.gh_token, type="password", help="Өгөгдөл устахаас сэргийлж GitHub рүү нөөцлөнө.")
+gh_owner = st.sidebar.text_input("GitHub Username (нэр)", value=st.session_state.gh_owner)
+gh_repo = st.sidebar.text_input("GitHub Repo (нэр)", value=st.session_state.gh_repo)
+
+# Хэрэв өөрчлөгдвөл файл руу хадгалах
+if gh_token != st.session_state.gh_token or gh_owner != st.session_state.gh_owner or gh_repo != st.session_state.gh_repo:
+    st.session_state.gh_token = gh_token
+    st.session_state.gh_owner = gh_owner
+    st.session_state.gh_repo = gh_repo
+    if gh_token and gh_owner and gh_repo:
+        with open(GH_CONFIG_FILE, 'w') as f:
+            json.dump({"gh_token": gh_token, "gh_owner": gh_owner, "gh_repo": gh_repo}, f)
 
 # --- GitHub Sync Функц ---
 def sync_to_github(df, owner, repo, token, path="court_data.csv"):
