@@ -324,6 +324,6 @@ with tab3:
         def color_status(val):
             return f'background-color: {STATUS_COLORS.get(val, "#1f3a5f")}; color: white; font-weight: bold;'
             styled_df = df_display.style.map(color_status, subset=['Одоогийн төлөв'])
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.warning("Хайлтын үр дүн хоосон байна.")
