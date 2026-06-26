@@ -319,7 +319,7 @@ with tab3:
     if search_query:
         df_display = df_display[df_display['Зээлдэгч'].str.contains(search_query, case=False) | df_display['Тэмдэглэл'].str.contains(search_query, case=False)]
     if filter_status != "Бүгд":
-        df_display = df_display[df_display['Одоогийн төлөв'] == filter_status]
+       styled_df = df_display.style.map(color_status, subset=['Одоогийн төлөв'])
         
     if not df_display.empty:
         def color_status(val):
