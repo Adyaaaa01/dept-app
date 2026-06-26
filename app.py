@@ -123,12 +123,12 @@ def save_data():
 # --- Sidebar ---
 st.sidebar.header("⚙️ Тохиргоо")
 if API_KEY:
-    st.sidebar.success("✅ Gemini API Key холбогдсон байна.")
+    st.sidebar.success("✅ Gemini API Key холбогдсон.")
 else:
     st.sidebar.error("⚠️ Secrets хэсэгт GEMINI_API_KEY оруулна уу!")
     
 if GH_TOKEN:
-    st.sidebar.success("✅ GitHub нөөцлөлт идэвхтэй байна.")
+    st.sidebar.success("✅ GitHub нөөцлөлт идэвхтэй.")
 else:
     st.sidebar.error("⚠️ Secrets хэсэгт GH_TOKEN оруулна уу!")
 
@@ -161,14 +161,49 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
     save_data()
     st.rerun()
 
-# --- AI унших функц ---
+# --- AI унших функц (Ухаалаг Retry болон Модель сонголттой) ---
+def get_best_gemini_model():
+    try:
+        genai.configure(api_key=API_KEY)
+        models = genai.list_models()
+        flash_models = []
+        for m in models:
+            if 'flash' in m.name.lower() and 'generateContent' in [method.name for method in m.supported_generation_methods]:
+                flash_models.append(m.name.replace("models/", ""))
+        
+        # Хамгийн шилдэг моделиудыг давуухан эрэмбээр сонгох
+        if 'gemini-2.0-flash' in flash_models:
+            return 'gemini-2.0-flash'
+        elif 'gemini-1.5-flash' in flash_models:
+            return 'gemini-1.5-flash'
+        elif 'gemini-flash-latest' in flash_models:
+            return 'gemini-flash-latest'
+        elif flash_models:
+            return flash_models[0]
+    except Exception as e:
+        st.error(f"Модель шалгахад алдаа: {e}")
+    return 'gemini-1.5-flash'
+
+def generate_with_retry(model, prompt_parts, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return model.generate_content(prompt_parts, request_options={"timeout": 120})
+        except Exception as e:
+            if "429" in str(e) and attempt < max_retries - 1:
+                st.warning(f"⏳ AI-н хязгаар хэтэрсэн тул 60 секунд хүлээж байна... ({attempt+1}/{max_retries-1})")
+                time.sleep(60)
+            else:
+                raise e
+
 def extract_info_from_file(file_obj):
     if not API_KEY:
         st.error("⚠️ API Key оруулаагүй байна!")
-        return None, None, None, None, None, None, None, None
+        return None
     try:
         genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel('gemini-flash-latest')
+        model_name = get_best_gemini_model()
+        model = genai.GenerativeModel(model_name)
+        
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг шинжилж, зөвхөн JSON формат буцаа:
         1. "doc_type": Баримтын төрөл
@@ -182,17 +217,17 @@ def extract_info_from_file(file_obj):
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nТекст:\n" + file_text)
+            response = generate_with_retry(model, prompt + "\n\nТекст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nТекст:\n" + file_text)
+            response = generate_with_retry(model, prompt + "\n\nТекст:\n" + file_text)
         elif file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
             img = Image.open(file_obj)
             if img.mode != 'RGB': img = img.convert('RGB')
-            response = model.generate_content([prompt, img])
+            response = generate_with_retry(model, [prompt, img])
         else:
-            return None, None, None, None, None, None, None, None
+            return None
 
         result = response.text.strip()
         if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
