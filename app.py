@@ -132,6 +132,16 @@ if GH_TOKEN:
 else:
     st.sidebar.error("⚠️ Secrets хэсэгт GH_TOKEN оруулна уу!")
 
+# --- ШИНЭ: AI Модель сонгох ---
+st.sidebar.markdown("---")
+st.sidebar.header("🤖 AI Модель сонгох")
+selected_model = st.sidebar.selectbox(
+    "Ашиглах моделийг сонгоно уу:",
+    ["gemini-flash-latest", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"],
+    index=0,
+    help="Хэрэв нэг модель алдаа өгвөл өөр модель сонгоорой."
+)
+
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Excel оруулах/Татах")
 up_excel = st.sidebar.file_uploader("Excel файлаас өгөгдөл татах", type=['xlsx'])
@@ -161,29 +171,7 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
     save_data()
     st.rerun()
 
-# --- AI унших функц (Ухаалаг Retry болон Модель сонголттой) ---
-def get_best_gemini_model():
-    try:
-        genai.configure(api_key=API_KEY)
-        models = genai.list_models()
-        flash_models = []
-        for m in models:
-            if 'flash' in m.name.lower() and 'generateContent' in [method.name for method in m.supported_generation_methods]:
-                flash_models.append(m.name.replace("models/", ""))
-        
-        # Хамгийн шилдэг моделиудыг давуухан эрэмбээр сонгох
-        if 'gemini-2.0-flash' in flash_models:
-            return 'gemini-2.0-flash'
-        elif 'gemini-1.5-flash' in flash_models:
-            return 'gemini-1.5-flash'
-        elif 'gemini-flash-latest' in flash_models:
-            return 'gemini-flash-latest'
-        elif flash_models:
-            return flash_models[0]
-    except Exception as e:
-        st.error(f"Модель шалгахад алдаа: {e}")
-    return 'gemini-1.5-flash'
-
+# --- AI унших функц ---
 def generate_with_retry(model, prompt_parts, max_retries=3):
     for attempt in range(max_retries):
         try:
@@ -201,8 +189,7 @@ def extract_info_from_file(file_obj):
         return None
     try:
         genai.configure(api_key=API_KEY)
-        model_name = get_best_gemini_model()
-        model = genai.GenerativeModel(model_name)
+        model = genai.GenerativeModel(selected_model) # Хэрэглэгчийн сонгосон модель
         
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг шинжилж, зөвхөн JSON формат буцаа:
