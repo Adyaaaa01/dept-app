@@ -168,7 +168,7 @@ def extract_info_from_file(file_obj):
         return None, None, None, None, None, None, None, None
     try:
         genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         file_text = ""
         prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг шинжилж, зөвхөн JSON формат буцаа:
         1. "doc_type": Баримтын төрөл
