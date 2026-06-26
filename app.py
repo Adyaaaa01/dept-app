@@ -20,6 +20,12 @@ UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
+# --- Нууц үгс (Secrets) унших ---
+API_KEY = st.secrets.get("GEMINI_API_KEY", "")
+GH_TOKEN = st.secrets.get("GH_TOKEN", "")
+GH_OWNER = st.secrets.get("GH_OWNER", "")
+GH_REPO = st.secrets.get("GH_REPO", "")
+
 # --- Орчин үеийн өнгө үзэмж (CSS) ---
 st.markdown("""
     <style>
@@ -55,119 +61,48 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("⚖️ Шүүх нэхэмжлэх болон Эвлэрүүлэн зуучлалын систем")
-st.markdown("##### Google Gemini AI дэмжлэгтэй, GitHub-тэй нөөцөлдөг веб апп")
+st.markdown("##### Мөнхөө хадгалагдах, AI дэмжлэгтэй систем (Сервер унтарсан ч өгөгдөл хадгалагдана)")
 
 STATUS_OPTIONS = [
-    "Шүүхэд өгсөн", 
-    "Эвлэрүүлэн зуучлалд өгсөн", 
-    "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
-    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон",
-    "Захирамж гарсан", 
-    "Шүүхийн шийдвэрийн зардалын гэрээ", 
-    "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", 
-    "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
-    "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", 
-    "Өр төлбөр дууссан"
+    "Шүүхэд өгсөн", "Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", 
+    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон", "Захирамж гарсан", "Шүүхийн шийдвэрийн зардалын гэрээ", 
+    "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн", 
+    "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа", "Өр төлбөр дууссан"
 ]
 
 STATUS_COLORS = {
-    "Шүүхэд өгсөн": "#1f3a5f",
-    "Эвлэрүүлэн зуучлалд өгсөн": "#8e44ad",
-    "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
-    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d",
-    "Захирамж гарсан": "#f39c12",
-    "Шүүхийн шийдвэрийн зардалын гэрээ": "#16a085",
-    "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400",
-    "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
-    "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа": "#e74c3c",
-    "Өр төлбөр дууссан": "#27ae60"
+    "Шүүхэд өгсөн": "#1f3a5f", "Эвлэрүүлэн зуучлалд өгсөн": "#8e44ad", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа": "#2980b9",
+    "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон": "#7f8c8d", "Захирамж гарсан": "#f39c12", "Шүүхийн шийдвэрийн зардалын гэрээ": "#16a085",
+    "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн": "#d35400", "Гүйцэтгэх хуудас гарсан шүүхийн шийдвэрт шилжүүлсэн": "#c0392b",
+    "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа": "#e74c3c", "Өр төлбөр дууссан": "#27ae60"
 }
 
 DATA_FILE = "court_data.csv"
-API_KEY_FILE = "api_key.txt"
-GH_CONFIG_FILE = "github_config.json"
 required_cols = ["№", "Зээлдэгч", "Хариуцсан ажилтан", "Шүүхэд өгсөн огноо", "Эвлэрүүлэнд өгсөн огноо", "Захирамж гарсан огноо", "Одоогийн төлөв", "Тэмдэглэл", "Файлын нэр"]
 
-# --- Sidebar ---
-st.sidebar.header("⚙️ Тохиргоо")
-
-# API Key-ийг файлд хадгалах
-if 'api_key' not in st.session_state:
-    if os.path.exists(API_KEY_FILE):
-        with open(API_KEY_FILE, 'r') as f:
-            st.session_state.api_key = f.read().strip()
-    else:
-        st.session_state.api_key = ""
-
-api_key = st.sidebar.text_input("Google Gemini API Key оруулна уу", value=st.session_state.api_key, type="password", help="aistudio.google.com сайтад бүртгүүлж үнэгүй key авна уу.")
-if api_key != st.session_state.api_key:
-    st.session_state.api_key = api_key
-    if api_key:
-        with open(API_KEY_FILE, 'w') as f:
-            f.write(api_key)
-
-st.sidebar.markdown("---")
-st.sidebar.header("☁️ GitHub нөөц (Backup)")
-
-# GitHub тохиргоог файлд хадгалах (Шинээр нэмэгдсэн хэсэг)
-if 'gh_token' not in st.session_state or 'gh_owner' not in st.session_state or 'gh_repo' not in st.session_state:
-    if os.path.exists(GH_CONFIG_FILE):
-        try:
-            with open(GH_CONFIG_FILE, 'r') as f:
-                gh_config = json.load(f)
-                st.session_state.gh_token = gh_config.get("gh_token", "")
-                st.session_state.gh_owner = gh_config.get("gh_owner", "")
-                st.session_state.gh_repo = gh_config.get("gh_repo", "")
-        except:
-            st.session_state.gh_token = ""
-            st.session_state.gh_owner = ""
-            st.session_state.gh_repo = ""
-    else:
-        st.session_state.gh_token = ""
-        st.session_state.gh_owner = ""
-        st.session_state.gh_repo = ""
-
-gh_token = st.sidebar.text_input("GitHub Token (ghp_...)", value=st.session_state.gh_token, type="password", help="Өгөгдөл устахаас сэргийлж GitHub рүү нөөцлөнө.")
-gh_owner = st.sidebar.text_input("GitHub Username (нэр)", value=st.session_state.gh_owner)
-gh_repo = st.sidebar.text_input("GitHub Repo (нэр)", value=st.session_state.gh_repo)
-
-# Хэрэв өөрчлөгдвөл файл руу хадгалах
-if gh_token != st.session_state.gh_token or gh_owner != st.session_state.gh_owner or gh_repo != st.session_state.gh_repo:
-    st.session_state.gh_token = gh_token
-    st.session_state.gh_owner = gh_owner
-    st.session_state.gh_repo = gh_repo
-    if gh_token and gh_owner and gh_repo:
-        with open(GH_CONFIG_FILE, 'w') as f:
-            json.dump({"gh_token": gh_token, "gh_owner": gh_owner, "gh_repo": gh_repo}, f)
-
-# --- GitHub Sync Функц ---
-def sync_to_github(df, owner, repo, token, path="court_data.csv"):
-    if not token or not owner or not repo: return False
-    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
-    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+# --- GitHub Sync Функцүүд ---
+def sync_to_github(df, path="court_data.csv"):
+    if not GH_TOKEN or not GH_OWNER or not GH_REPO: return False
+    url = f"https://api.github.com/repos/{GH_OWNER}/{GH_REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     r = requests.get(url, headers=headers)
     sha = r.json().get("sha") if r.status_code == 200 else None
-    
     content = df.to_csv(index=False).encode('utf-8')
     content_b64 = base64.b64encode(content).decode('utf-8')
-    data = {"message": "Auto backup court_data", "content": content_b64, "sha": sha}
+    data = {"message": "Auto backup", "content": content_b64, "sha": sha}
     r = requests.put(url, headers=headers, json=data)
     return r.status_code in [200, 201]
 
-def load_from_github(owner, repo, path="court_data.csv"):
-    url = f"https://raw.githubusercontent.com/{owner}/{repo}/main/{path}"
+def load_from_github(path="court_data.csv"):
+    url = f"https://raw.githubusercontent.com/{GH_OWNER}/{GH_REPO}/main/{path}"
     try:
-        df = pd.read_csv(url)
-        return df
+        return pd.read_csv(url)
     except:
         return None
 
-# --- Өгөгдөл ачаалах (GitHub-ээс татдаг болгов) ---
+# --- Өгөгдөл ачаалах ---
 if 'df_court' not in st.session_state:
-    gh_df = None
-    if gh_token and gh_owner and gh_repo:
-        gh_df = load_from_github(gh_owner, gh_repo)
-    
+    gh_df = load_from_github() if GH_TOKEN else None
     if gh_df is not None and not gh_df.empty:
         st.session_state.df_court = gh_df
         for col in required_cols:
@@ -178,12 +113,24 @@ if 'df_court' not in st.session_state:
 
 def save_data():
     st.session_state.df_court.to_csv(DATA_FILE, index=False)
-    if gh_token and gh_owner and gh_repo:
-        with st.spinner("☁️ GitHub рүү хадгалж байна..."):
-            if sync_to_github(st.session_state.df_court, gh_owner, gh_repo, gh_token):
+    if GH_TOKEN:
+        with st.spinner("☁️ Өгөгдөл хадгалж байна..."):
+            if sync_to_github(st.session_state.df_court):
                 st.sidebar.success("☁️ Нөөцлөгдлөө!")
             else:
                 st.sidebar.error("⚠️ Нөөцлөхөд алдаа!")
+
+# --- Sidebar ---
+st.sidebar.header("⚙️ Тохиргоо")
+if API_KEY:
+    st.sidebar.success("✅ Gemini API Key холбогдсон байна.")
+else:
+    st.sidebar.error("⚠️ Secrets хэсэгт GEMINI_API_KEY оруулна уу!")
+    
+if GH_TOKEN:
+    st.sidebar.success("✅ GitHub нөөцлөлт идэвхтэй байна.")
+else:
+    st.sidebar.error("⚠️ Secrets хэсэгт GH_TOKEN оруулна уу!")
 
 st.sidebar.markdown("---")
 st.sidebar.header("📁 Excel оруулах/Татах")
@@ -203,17 +150,6 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Шүүх нэхэмжлэл')
         df_med = df[df["Одоогийн төлөв"].isin(["Эвлэрүүлэн зуучлалд өгсөн", "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа", "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон"])].copy()
         df_med.to_excel(writer, index=False, sheet_name='Эвлэрүүлэн зуучлал')
-        dashboard_data = {
-            "Үзүүлэлт": ["Нийт хэрэг", "Шүүхэд өгсөн", "Захирамж гарсан", "Шүүхийн шийдвэрийн зардалын гэрээ", "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн", "Гүйцэтгэлд явж байгаа", "Өр дууссан", "Эвлэрүүлэнд өгсөн", "Эвлэрүүлэх захирамж дагуу төлж байгаа", "Дуусгавар болсон"],
-            "Тоо": [
-                len(df), len(df[df["Одоогийн төлөв"] == "Шүүхэд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Захирамж гарсан"]),
-                len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэрийн зардалын гэрээ"]),
-                len(df[df["Одоогийн төлөв"] == "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн"]), len(df[df["Одоогийн төлөв"] == "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа"]),
-                len(df[df["Одоогийн төлөв"] == "Өр төлбөр дууссан"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалд өгсөн"]), len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэн зуучлалын захирамж дагуу төлж байгаа"]),
-                len(df[df["Одоогийн төлөв"] == "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон"])
-            ]
-        }
-        pd.DataFrame(dashboard_data).to_excel(writer, index=False, sheet_name='Dashboard')
     return output.getvalue()
 
 if not st.session_state.df_court.empty:
@@ -226,77 +162,48 @@ if st.sidebar.button("🗑️ Бүх бүртгэлийг устгах", use_con
     st.rerun()
 
 # --- AI унших функц ---
-def extract_info_from_file(file_obj, key):
-    if not key: 
-        st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
+def extract_info_from_file(file_obj):
+    if not API_KEY:
+        st.error("⚠️ API Key оруулаагүй байна!")
         return None, None, None, None, None, None, None, None
     try:
-        genai.configure(api_key=key)
+        genai.configure(api_key=API_KEY)
         model = genai.GenerativeModel('gemini-flash-latest')
-        
         file_text = ""
-        prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг маш нарийнаар шинжилж, дараах мэдээллийг татаад зөвхөн JSON формат буцаа:
-        1. "doc_type": Баримтын төрөл ("Шүүхийн нэхэмжлэл", "Эвлэрүүлэн зуучлалын өргөдөл", эсвэл "Гүйцэтгэх захирамж").
-        2. "name": Өрнийн эзэн буюу ЗЭЭЛДЭГЧИЙН нэр (Овог Нэр). Хариуцагч, төлөөлөгчийн нэрийг бичиж болохгүй!
-        3. "officer": Баримт бичиг дээр "Итгэмжлэгдсэн төлөөлөгч", "Хуульч", "Гүйцэтгэлийн ажилтан" гэх зэргээр бичигдсэн хүний нэр. Хэрэв олдоогүй бол "null" гэж бич.
-        4. "status_hint": ЗУРАГ ДЭЭРХ АГУУЛГААР ЭНЭ ХЭРГИЙН ОДООГИЙН ТӨЛӨВ ЮУ БАЙГААГ НАРИЙН ШИНЖИЛЖ ТОГТОО. Зөвхөн эдгээрээс аль нэгийг сонго: 
-        - "Шүүхэд өгсөн" (Шинээр нэхэмжлэл гарсан үе шат)
-        - "Эвлэрүүлэн зуучлалд өгсөн" (Эвлэрүүлэн зуучлалд өгсөн бол)
-        - "Эвлэрүүлэнд өгсөн ч хэрэг дуусгавар болсон" (Эвлэрүүлэх гэсэн ч ирээгүй, гэрээ байгуулаагүй дуусгавар болсон бол)
-        - "Захирамж гарсан" (Шүүхийн шийдвэр, захирамж гарсан бол)
-        - "Шүүхийн шийдвэрийн зардалын гэрээ" (Хэрэв "шийдвэрийн зардалын тухай гэрээ", "зардалын гэрээг шүүхэд шилжүүлэв" гэх мэт үг байвал заавал үүнийг сонго)
-        - "Гүйцэтгэх хуудас бичүүлэх гэж өгсөн" ("гүйцэтгэх хуудас олгож өгнө үү", "гүйцэтгэх захирамж гаргаж" гэх мэт)
-        - "Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа" (Шүүхийн шийдвэр гарсны дараа гүйцэтгэлийн ажиллагаанд шилжсэн бол)
-        Анхаар: Зөвхөн нэг үг байна гээд төлвийг нь буруу тогтоохгүй байх. Зургийн бүхэл бүтэн агуулгыг уншиж тогтоо.
-        5. "court_date": Шүүхэд өгсөн эсвэл нэхэмжлэх гарсан огноо (YYYY-MM-DD форматад). Өөр огноо бүү бич.
-        6. "mediation_date": Эвлэрүүлэнд өгсөн огноо (YYYY-MM-DD форматад, үгүй бол null).
-        7. "order_date": Захирамж гарсан огноо (YYYY-MM-DD форматад, үгүй бол null).
-        8. "summary": Баримт бичгийн гол агуулга, нэхэмжилсэн зүйл, шаардсан дүн зэрэгийг товч тодорхой 1-3 өгүүлбэрээр монгол хэл дээр бич. ХЭРЭВ ХЭРЭГ ДУУСГАВАР БОЛСОН БОЛ ЯМАР ШАЛТГААНААР ДУУСГАВАР БОЛСНЫГ ЗААВАЛ ЭНД БИЧНЭ ҮҮ.
-        Зөвхөн JSON буцаа."""
-
+        prompt = """Энэхүү баримт бичгийн зураг эсвэл текстийг шинжилж, зөвхөн JSON формат буцаа:
+        1. "doc_type": Баримтын төрөл
+        2. "name": Зээлдэгчийн нэр
+        3. "officer": Хариуцсан ажилтан
+        4. "status_hint": Төлөв (${STATUS_OPTIONS} эдгээрээс нэгийг сонго)
+        5. "court_date": YYYY-MM-DD
+        6. "order_date": YYYY-MM-DD
+        7. "summary": Гол агуулга. Зөвхөн JSON."""
+        
         if file_obj.name.endswith('.docx'):
             doc = docx.Document(file_obj)
             file_text = "\n".join([para.text for para in doc.paragraphs])
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
+            response = model.generate_content(prompt + "\n\nТекст:\n" + file_text)
         elif file_obj.name.endswith('.pdf'):
             with pdfplumber.open(file_obj) as pdf:
                 for page in pdf.pages: file_text += page.extract_text() + "\n"
-            response = model.generate_content(prompt + "\n\nБаримтын текст:\n" + file_text)
-        elif file_obj.name.endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
+            response = model.generate_content(prompt + "\n\nТекст:\n" + file_text)
+        elif file_obj.name.endswith(('.png', '.jpg', '.jpeg')):
             img = Image.open(file_obj)
-            max_size = (1024, 1024)
-            img.thumbnail(max_size)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            if img.mode != 'RGB': img = img.convert('RGB')
             response = model.generate_content([prompt, img])
         else:
             return None, None, None, None, None, None, None, None
 
         result = response.text.strip()
         if result.startswith("```json"): result = result.replace("```json", "").replace("```", "").strip()
-            
         json_match = re.search(r'\{.*\}', result, re.DOTALL)
         if json_match:
-            result = json_match.group(0)
-        else:
-            return None, None, None, None, None, None, None, None
-
-        data = json.loads(result)
-        doc_type = data.get("doc_type", "Шүүхийн нэхэмжлэл")
-        name = data.get("name")
-        officer = data.get("officer") if data.get("officer") and data.get("officer") != "null" else "Тодорхой бус"
-        status_hint = data.get("status_hint", "Шүүхэд өгсөн")
-        
-        c_date = data.get("court_date")
-        m_date = data.get("mediation_date")
-        o_date = data.get("order_date")
-        summary = data.get("summary", "")
-        
-        return doc_type, name, officer, status_hint, c_date, m_date, o_date, summary
-            
+            data = json.loads(json_match.group(0))
+            return data.get("doc_type"), data.get("name"), data.get("officer"), data.get("status_hint"), data.get("court_date"), None, data.get("order_date"), data.get("summary", "")
+        return None
     except Exception as e:
-        st.error(f"Алдаа ({file_obj.name}): {e}")
-        return None, None, None, None, None, None, None, None
+        st.error(f"Алдаа: {e}")
+        return None
 
 # --- TAB ҮҮСГЭХ ХЭСЭГ ---
 tab1, tab2, tab3 = st.tabs(["📊 Хяналтын самбар", "🤖 Шинэ бүртгэл", "👥 Харилцагчид"])
@@ -321,226 +228,81 @@ with tab1:
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Шүүхийн шийдвэр гүйцэтгэх ажиллагаанд явж байгаа")}</div><div class="metric-label">Гүйцэтгэлд явж байгаа</div></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="metric-card"><div class="metric-num">{get_count("Өр төлбөр дууссан")}</div><div class="metric-label">Өр дууссан</div></div>', unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.subheader("👨‍💼 Хариуцсан ажилтнаар ангилсан бүртгэл")
-    if not df.empty and "Хариуцсан ажилтан" in df.columns and "Одоогийн төлөв" in df.columns:
-        officer_df = df.copy()
-        officer_df["Хариуцсан ажилтан"] = officer_df["Хариуцсан ажилтан"].replace("", "Тодорхой бус").fillna("Тодорхой бус")
-        pivot_df = officer_df.pivot_table(index="Хариуцсан ажилтан", columns="Одоогийн төлөв", aggfunc='size', fill_value=0).reset_index()
-        pivot_df['Нийт хэрэг'] = pivot_df.drop(columns=['Хариуцсан ажилтан']).sum(axis=1)
-        st.dataframe(pivot_df, use_container_width=True, hide_index=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("##### 📊 Хариуцсан ажилтны хэрэгүүдийн төлөв (Ямар ямар хэрэгтэй вэ?)")
-        chart_data = pivot_df.set_index("Хариуцсан ажилтан").drop(columns=['Нийт хэрэг'])
-        if not chart_data.empty:
-            st.bar_chart(chart_data)
-    else:
-        st.info("ℹ️ Хариуцсан ажилтнаар ангилсан өгөгдөл хоосон байна.")
-
 with tab2:
     col1, col2 = st.columns([1, 2])
     with col1:
         st.subheader("📄 Олон файл зэрэг оруулах")
-        uploaded_files = st.file_uploader("Олон файл оруулна уу (Word, PDF, Зураг)", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Олон файл оруулна уу", type=['png', 'jpg', 'jpeg', 'pdf', 'docx'], accept_multiple_files=True)
         if st.button("🤖 Бүх файлыг AI-аар уншуулах", use_container_width=True):
             if uploaded_files:
-                if not api_key: st.error("⚠️ Зүүн талын цэснээс Google Gemini API Key оруулна уу!")
-                else:
-                    progress_bar = st.progress(0); success_count = 0
-                    for i, file_obj in enumerate(uploaded_files):
-                        with st.spinner(f"Уншиж байна: {file_obj.name} (Хүлээж байна...)"):
-                            doc_type, name, officer, status_hint, c_date, m_date, o_date, summary = extract_info_from_file(file_obj, api_key)
-                            if name:
-                                try: court_date = datetime.strptime(c_date, "%Y-%m-%d").date() if c_date and c_date != "null" else ""
-                                except: court_date = ""
-                                try: mediation_date = datetime.strptime(m_date, "%Y-%m-%d").date() if m_date and m_date != "null" else ""
-                                except: mediation_date = ""
-                                try: order_date = datetime.strptime(o_date, "%Y-%m-%d").date() if o_date and o_date != "null" else ""
-                                except: order_date = ""
-                                
-                                if status_hint not in STATUS_OPTIONS:
-                                    current_status = "Эвлэрүүлэн зуучлалд өгсөн" if "эвлэр" in status_hint.lower() else "Шүүхэд өгсөн"
-                                else:
-                                    current_status = status_hint
+                progress_bar = st.progress(0); success_count = 0
+                for i, file_obj in enumerate(uploaded_files):
+                    with st.spinner(f"Уншиж байна: {file_obj.name}..."):
+                        info = extract_info_from_file(file_obj)
+                        if info and info[1]:
+                            new_id = len(st.session_state.df_court) + 1
+                            existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
+                            count = sum(1 for n in existing_names if n.startswith(info[1]))
+                            display_name = f"{info[1]} ({count + 1})" if count > 0 else info[1]
+                            
+                            safe_name = "".join(c for c in str(info[1]) if c.isalnum() or c in (' ', '.', '_')).rstrip()
+                            saved_filename = f"{new_id}_{safe_name}_{file_obj.name}"
+                            with open(os.path.join(UPLOAD_DIR, saved_filename), "wb") as f:
+                                f.write(file_obj.getbuffer())
 
-                                new_id = len(st.session_state.df_court) + 1
-                                existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
-                                count = sum(1 for n in existing_names if n.startswith(name))
-                                display_name = f"{name} ({count + 1})" if count > 0 else name
-                                
-                                safe_name = "".join(c for c in str(name) if c.isalnum() or c in (' ', '.', '_')).rstrip()
-                                saved_filename = f"{new_id}_{safe_name}_{file_obj.name}"
-                                file_path = os.path.join(UPLOAD_DIR, saved_filename)
-                                with open(file_path, "wb") as f:
-                                    f.write(file_obj.getbuffer())
-
-                                new_data = {
-                                    "№": new_id, "Зээлдэгч": display_name, "Хариуцсан ажилтан": officer,
-                                    "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d") if court_date else "",
-                                    "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d") if mediation_date else "",
-                                    "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
-                                    "Одоогийн төлөв": current_status, "Тэмдэглэл": summary if summary else "",
-                                    "Файлын нэр": saved_filename
-                                }
-                                st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
-                                save_data(); success_count += 1
-                        progress_bar.progress((i + 1) / len(uploaded_files))
-                    if success_count > 0:
-                        st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдаж бүртгэгдлээ!")
-                    else:
-                        st.error("⚠️ Файл уншигдсангүй. API Key-ээ шалгана уу.")
-            else: st.warning("Эхлээд файлуудаа оруулна уу.")
+                            st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([{
+                                "№": new_id, "Зээлдэгч": display_name, "Хариуцсан ажилтан": info[2] if info[2] and info[2] != "null" else "Тодорхой бус",
+                                "Шүүхэд өгсөн огноо": info[4] if info[4] and info[4] != "null" else "",
+                                "Эвлэрүүлэнд өгсөн огноо": "",
+                                "Захирамж гарсан огноо": info[6] if info[6] and info[6] != "null" else "",
+                                "Одоогийн төлөв": info[3] if info[3] in STATUS_OPTIONS else "Шүүхэд өгсөн",
+                                "Тэмдэглэл": info[7] if info[7] else "", "Файлын нэр": saved_filename
+                            }])], ignore_index=True)
+                            save_data(); success_count += 1
+                    progress_bar.progress((i + 1) / len(uploaded_files))
+                if success_count > 0:
+                    st.success(f"✅ {success_count} ширхэг файл амжилттай уншигдлаа!")
 
     with col2:
         st.subheader("✍️ Гар аргаар нэг бүрчлэн бүртгэх")
         with st.form("burtgeh_form"):
-            name = st.text_input("Зээлдэгчийн нэр", value=st.session_state.get('temp_name', ''))
-            c_col, m_col, o_col = st.columns(3)
-            with c_col: court_date = st.date_input("Шүүхэд өгсөн огноо", value=st.session_state.get('temp_c_date', datetime.now()))
-            with m_col: mediation_date = st.date_input("Эвлэрүүлэнд өгсөн огноо", value=st.session_state.get('temp_m_date', datetime.now()))
-            with o_col: order_date = st.date_input("Захирамж гарсан огноо (Хоосон орхиж болно)", value=st.session_state.get('temp_o_date', None))
-            status = st.selectbox("Одоогийн төлөв / Дараагийн хийх ажил", STATUS_OPTIONS, index=0)
-            officer = st.text_input("Хариуцсан ажилтан", value="Б.Адъяабазар")
-            note = st.text_area("Тэмдэглэл (Өргөдлийн агуулга)", value=st.session_state.get('temp_note', ''))
-            submitted = st.form_submit_button("Бүртгэл хадгалах", use_container_width=True)
-            if submitted:
+            name = st.text_input("Зээлдэгчийн нэр")
+            c_col, o_col = st.columns(2)
+            with c_col: court_date = st.date_input("Шүүхэд өгсөн огноо", datetime.now())
+            with o_col: order_date = st.date_input("Захирамж гарсан огноо", None)
+            status = st.selectbox("Одоогийн төлөв", STATUS_OPTIONS, index=0)
+            officer = st.text_input("Хариуцсан ажилтан", "Б.Адъяабазар")
+            note = st.text_area("Тэмдэглэл")
+            if st.form_submit_button("Бүртгэл хадгалах", use_container_width=True):
                 if name:
                     new_id = len(st.session_state.df_court) + 1
-                    existing_names = st.session_state.df_court["Зээлдэгч"].astype(str).tolist()
-                    count = sum(1 for n in existing_names if n.startswith(name))
-                    display_name = f"{name} ({count + 1})" if count > 0 else name
-                    
-                    new_data = {
-                        "№": new_id, "Зээлдэгч": display_name, "Хариуцсан ажилтан": officer,
-                        "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"), "Эвлэрүүлэнд өгсөн огноо": mediation_date.strftime("%Y-%m-%d"),
-                        "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "", "Одоогийн төлөв": status, "Тэмдэглэл": note,
-                        "Файлын нэр": ""
-                    }
-                    st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([new_data])], ignore_index=True)
+                    st.session_state.df_court = pd.concat([st.session_state.df_court, pd.DataFrame([{
+                        "№": new_id, "Зээлдэгч": name, "Хариуцсан ажилтан": officer,
+                        "Шүүхэд өгсөн огноо": court_date.strftime("%Y-%m-%d"), "Эвлэрүүлэнд өгсөн огноо": "",
+                        "Захирамж гарсан огноо": order_date.strftime("%Y-%m-%d") if order_date else "",
+                        "Одоогийн төлөв": status, "Тэмдэглэл": note, "Файлын нэр": ""
+                    }])], ignore_index=True)
                     save_data()
-                    st.success(f"✅ {display_name} амжилттай бүртгэгдлээ!")
-                else: st.error("Зээлдэгчийн нэр хоосон байна!")
+                    st.success(f"✅ {name} амжилттай бүртгэгдлээ!")
 
 with tab3:
     st.subheader("👥 Бүртгэлтэй харилцагчид")
-    
-    # Хайлт болон Шүүлтүүр (Фильтр) нэмэх
     col_search1, col_search2 = st.columns([3, 2])
     with col_search1:
         search_query = st.text_input("🔍 Нэр эсвэл тэмдэглэлээр хайх", "")
     with col_search2:
         filter_status = st.selectbox("Төлөвөөр шүүх", ["Бүгд"] + STATUS_OPTIONS)
         
-    # Өгөгдлийг шүүх
     df_display = st.session_state.df_court.copy().fillna("")
     if search_query:
         df_display = df_display[df_display['Зээлдэгч'].str.contains(search_query, case=False) | df_display['Тэмдэглэл'].str.contains(search_query, case=False)]
     if filter_status != "Бүгд":
         df_display = df_display[df_display['Одоогийн төлөв'] == filter_status]
         
-    view_mode = st.radio("Харах хэлбэр", ["Карт хэлбэрээр (Гоё)", "Хүснэгтээр (Засварлах)"], horizontal=True)
-    
     if not df_display.empty:
-        if view_mode == "Хүснэгтээр (Засварлах)":
-            if search_query or filter_status != "Бүгд":
-                st.info("ℹ️ Хайлтын үр дүн. Засвар хийхийн тулд эхлээд хайлтаа цэвэрлээрэй.")
-                
-                # Төлөв бүрийн өнгийг HTML таблицаар харуулах
-                def color_status(val):
-                    color = STATUS_COLORS.get(val, "#1f3a5f")
-                    return f'background-color: {color}; color: white; font-weight: bold;'
-                
-                styled_df = df_display.style.applymap(color_status, subset=['Одоогийн төлөв'])
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
-            else:
-                display_df = st.session_state.df_court.fillna("").copy()
-                if "Устгах" not in display_df.columns:
-                    display_df.insert(0, "Устгах", False)
-                    
-                edited_df = st.data_editor(
-                    display_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="fixed",
-                    column_config={
-                        "Устгах": st.column_config.CheckboxColumn("Устгах", default=False),
-                        "Одоогийн төлөв": st.column_config.SelectboxColumn("Одоогийн төлөв", help="Харилцагчийн үе шатыг сонгоно уу", options=STATUS_OPTIONS, required=True)
-                    }
-                )
-                
-                rows_to_delete = edited_df[edited_df["Устгах"] == True]
-                if not rows_to_delete.empty:
-                    st.warning(f"⚠️ {len(rows_to_delete)} харилцагч устгахад бэлэн боллоо.")
-                    if st.button(f"❌ Сонгосон {len(rows_to_delete)} харилцагчийг устгах", use_container_width=True):
-                        st.session_state.df_court = edited_df[edited_df["Устгах"] == False].drop(columns=["Устгах"]).reset_index(drop=True)
-                        save_data()
-                        st.rerun()
-                else:
-                    st.session_state.df_court = edited_df.drop(columns=["Устгах"]).reset_index(drop=True)
-                    save_data()
-        else:
-            # Карт хэлбэрээр хурдан гаргах (Хуудаслалт - Pagination)
-            PAGE_SIZE = 8
-            total_items = len(df_display)
-            total_pages = (total_items + PAGE_SIZE - 1) // PAGE_SIZE
-            
-            if 'card_page' not in st.session_state:
-                st.session_state.card_page = 0
-            
-            if st.session_state.card_page >= total_pages:
-                st.session_state.card_page = 0
-                
-            start_idx = st.session_state.card_page * PAGE_SIZE
-            end_idx = min(start_idx + PAGE_SIZE, total_items)
-            
-            st.write(f"Нийт {total_items} харилцагчийн {start_idx+1}-{end_idx} харуулж байна (Хуудас {st.session_state.card_page + 1}/{total_pages})")
-            
-            cols = st.columns(2)
-            current_page_df = df_display.iloc[start_idx:end_idx]
-            
-            display_idx = 0
-            for idx, row in current_page_df.iterrows():
-                status = row["Одоогийн төлөв"]
-                color = STATUS_COLORS.get(status, "#1f3a5f")
-                
-                image_html = ""
-                if "Файлын нэр" in row and row["Файлын нэр"]:
-                    file_path = os.path.join(UPLOAD_DIR, row["Файлын нэр"])
-                    if os.path.exists(file_path):
-                        if row["Файлын нэр"].lower().endswith(('.png', '.jpg', '.jpeg', '.heic', '.webp')):
-                            with open(file_path, "rb") as img_file:
-                                img_b64 = base64.b64encode(img_file.read()).decode()
-                            image_html = f'<div class="img-container"><img src="data:image/jpeg;base64,{img_b64}" alt="Баримт"></div>'
-                        else:
-                            image_html = f'<div class="note-box">📎 Файл: {row["Файлын нэр"]}</div>'
-
-                card_html = f"""
-                <div class="client-card" style="border-left-color: {color};">
-                    <div class="client-name">{row['Зээлдэгч']} 
-                        <span class="status-badge" style="background-color: {color};">{status}</span>
-                    </div>
-                    <div class="info-row"><span class="info-label">👤 Хариуцсан:</span> {row['Хариуцсан ажилтан']}</div>
-                    <div class="info-row"><span class="info-label">📅 Шүүхэд өгсөн:</span> {row['Шүүхэд өгсөн огноо']}</div>
-                    <div class="info-row"><span class="info-label">🤝 Эвлэрүүлэнд өгсөн:</span> {row['Эвлэрүүлэнд өгсөн огноо']}</div>
-                    <div class="info-row"><span class="info-label">⚖️ Захирамж гарсан:</span> {row['Захирамж гарсан огноо']}</div>
-                    {f'<div class="note-box">📝 {row["Тэмдэглэл"]}</div>' if row['Тэмдэглэл'] else ''}
-                    {image_html}
-                </div>
-                """
-                with cols[display_idx % 2]:
-                    st.markdown(card_html, unsafe_allow_html=True)
-                display_idx += 1
-                
-            st.markdown("---")
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col1:
-                if st.button("⬅️ Өмнөх хуудас", use_container_width=True, disabled=(st.session_state.card_page == 0)):
-                    st.session_state.card_page -= 1
-                    st.rerun()
-            with col3:
-                if st.button("Дараагийн хуудас ➡️", use_container_width=True, disabled=(st.session_state.card_page >= total_pages - 1)):
-                    st.session_state.card_page += 1
-                    st.rerun()
+        def color_status(val):
+            return f'background-color: {STATUS_COLORS.get(val, "#1f3a5f")}; color: white; font-weight: bold;'
+        styled_df = df_display.style.applymap(color_status, subset=['Одоогийн төлөв'])
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
         st.warning("Хайлтын үр дүн хоосон байна.")
